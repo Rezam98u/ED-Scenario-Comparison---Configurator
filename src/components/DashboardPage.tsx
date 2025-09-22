@@ -49,7 +49,7 @@ export function DashboardPage() {
     }
   }, [error, currentPvKw])
 
-  // 🎯 React Query mutation for PV config changes
+  // React Query mutation for PV config changes
   const pvConfigMutation = useMutation({
     mutationFn: async (newPvKw: number) => {
       if (!data) throw new Error('No data available')
@@ -88,7 +88,7 @@ export function DashboardPage() {
     }
   }, [pvConfigMutation.isError, pvConfigMutation.error, currentPvKw])
 
-  // 🔄 Calculate scenario when data or PV config changes
+  // Calculate scenario when data or PV config changes
   useEffect(() => {
     if (data) {
       const result = calculateScenario(data.baseline, currentPvKw)
@@ -125,7 +125,7 @@ export function DashboardPage() {
     refetch()
   }
 
-  // 🚀 React Query handles all loading/error states
+  // React Query handles all loading/error states
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
