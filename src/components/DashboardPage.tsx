@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { TimeSeriesChart } from './TimeSeriesChart'
 import { KpiCards } from './KpiCards'
 import { PvConfigurator } from './PvConfigurator'
@@ -10,74 +11,63 @@ import { calculateScenario, logger } from '../utils'
 import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis } from '../types'
 
 export function DashboardPage() {
-  const [data, setData] = useState<EnergyApiResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
   const [currentPvKw, setCurrentPvKw] = useState(10) // Default 10kW
-  const [isApplying, setIsApplying] = useState(false)
-
-  // Current scenario and KPIs based on PV configuration
   const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null)
   const [currentKpis, setCurrentKpis] = useState<Kpis | null>(null)
 
-  // Fetch initial data
+  // Calculate date range
+  const endDate = new Date().toISOString().split('T')[0]
+  const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  // React Query handles ALL data fetching
+  const { 
+    data, 
+    isLoading, 
+    error, 
+    refetch 
+  } = useQuery<EnergyApiResponse>({
+    queryKey: ['energy-data', startDate, endDate],
+    queryFn: () => energyApi.getEnergyData(startDate, endDate),
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    retry: 1,
+  })
+
+  // Log successful data fetch
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        
-        logger.info('Starting data fetch', 'DashboardPage')
-        
-        // Fetch data for the past week
-        const endDate = new Date().toISOString().split('T')[0]
-        const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-        
-        logger.debug(`Fetching energy data from ${startDate} to ${endDate}`, 'DashboardPage')
-        
-        const response = await energyApi.getEnergyData(startDate, endDate)
-        setData(response)
-        
-        logger.info('Data fetch successful', 'DashboardPage', { 
-          dataPoints: response.timestamps.length,
-          baselineConsumption: response.baseline.consumption.reduce((sum, val) => sum + val, 0)
-        })
-        
-        // Calculate initial scenario
-        const result = calculateScenario(response.baseline, currentPvKw)
-        setCurrentScenario(result.scenario)
-        setCurrentKpis(result.kpis)
-        
-        logger.debug('Initial scenario calculated', 'DashboardPage', {
-          pvKw: currentPvKw,
-          consumption: result.kpis.total_consumption_kwh,
-          pvCoverage: result.kpis.pv_coverage_pct
-        })
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error('Failed to fetch data')
-        logger.trackError(error, 'DashboardPage', { currentPvKw })
-        setError(error)
-      } finally {
-        setLoading(false)
-      }
+    if (data) {
+      logger.info('Data fetch successful', 'DashboardPage', { 
+        dataPoints: data.timestamps.length,
+        baselineConsumption: data.baseline.consumption.reduce((sum: number, val: number) => sum + val, 0)
+      })
     }
+  }, [data])
 
-    fetchData()
-  }, [currentPvKw])
+  // Log errors
+  useEffect(() => {
+    if (error) {
+      logger.trackError(error, 'DashboardPage', { currentPvKw })
+    }
+  }, [error, currentPvKw])
 
-  // Handle PV configuration changes
-  const handlePvConfigApply = async (newPvKw: number) => {
-    if (!data) return
-
-    setIsApplying(true)
-    
-    try {
+  // 🎯 React Query mutation for PV config changes
+  const pvConfigMutation = useMutation({
+    mutationFn: async (newPvKw: number) => {
+      if (!data) throw new Error('No data available')
+      
       logger.info(`Applying new PV configuration: ${newPvKw} kW`, 'DashboardPage')
       
-      // Simulate some processing time
+      // Simulate processing time
       await new Promise(resolve => setTimeout(resolve, 500))
       
       const result = calculateScenario(data.baseline, newPvKw)
+      return { newPvKw, result }
+    }
+  })
+
+  // Handle mutation success
+  useEffect(() => {
+    if (pvConfigMutation.isSuccess && pvConfigMutation.data) {
+      const { newPvKw, result } = pvConfigMutation.data
       setCurrentScenario(result.scenario)
       setCurrentKpis(result.kpis)
       setCurrentPvKw(newPvKw)
@@ -88,20 +78,41 @@ export function DashboardPage() {
         newPvCoverage: result.kpis.pv_coverage_pct,
         co2Savings: result.kpis.co2_savings_ton
       })
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to calculate scenario')
-      logger.trackError(error, 'DashboardPage', { newPvKw, hasData: !!data })
-      setError(error)
-    } finally {
-      setIsApplying(false)
     }
+  }, [pvConfigMutation.isSuccess, pvConfigMutation.data])
+
+  // Handle mutation error
+  useEffect(() => {
+    if (pvConfigMutation.isError && pvConfigMutation.error) {
+      logger.trackError(pvConfigMutation.error, 'DashboardPage', { currentPvKw })
+    }
+  }, [pvConfigMutation.isError, pvConfigMutation.error, currentPvKw])
+
+  // 🔄 Calculate scenario when data or PV config changes
+  useEffect(() => {
+    if (data) {
+      const result = calculateScenario(data.baseline, currentPvKw)
+      setCurrentScenario(result.scenario)
+      setCurrentKpis(result.kpis)
+      
+      logger.debug('Scenario calculated', 'DashboardPage', {
+        pvKw: currentPvKw,
+        consumption: result.kpis.total_consumption_kwh,
+        pvCoverage: result.kpis.pv_coverage_pct
+      })
+    }
+  }, [data, currentPvKw])
+
+  // Handle PV configuration changes
+  const handlePvConfigApply = async (newPvKw: number) => {
+    pvConfigMutation.mutate(newPvKw)
   }
 
   // Prepare chart data
   const chartData: ChartDataPoint[] = useMemo(() => {
     if (!data || !currentScenario) return []
 
-    return data.timestamps.map((timestamp, index) => ({
+    return data.timestamps.map((timestamp: string, index: number) => ({
       timestamp,
       baseline_consumption: data.baseline.consumption[index],
       baseline_pv: data.baseline.pv_generation[index],
@@ -111,12 +122,11 @@ export function DashboardPage() {
   }, [data, currentScenario])
 
   const handleRetry = () => {
-    setError(null)
-    // Trigger re-fetch by changing a dependency
-    setCurrentPvKw(prev => prev)
+    refetch()
   }
 
-  if (loading) {
+  // 🚀 React Query handles all loading/error states
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
@@ -210,7 +220,7 @@ export function DashboardPage() {
               <PvConfigurator
                 currentPvKw={currentPvKw}
                 onApply={handlePvConfigApply}
-                isLoading={isApplying}
+                isLoading={pvConfigMutation.isPending}
               />
             </ErrorBoundary>
           </div>
