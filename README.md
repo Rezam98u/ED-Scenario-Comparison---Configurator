@@ -2,7 +2,8 @@
 
 An interactive dashboard for comparing energy scenarios, featuring baseline vs proposal comparison with PV capacity configuration. Built with React, TypeScript, and modern frontend best practices.
 
-![Dashboard Preview](https://via.placeholder.com/800x400?text=Energy+Dashboard+Preview)
+![Dashboard Preview](./public/dashboard-preview.png)
+
 
 ## Features
 
