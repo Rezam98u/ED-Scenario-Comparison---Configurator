@@ -1,5 +1,4 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
-import { logger } from '../utils/logger'
 
 interface Props {
   children: ReactNode
@@ -30,12 +29,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log the error to our centralized logger
-    logger.trackComponentError(
-      this.props.context || 'Unknown Component',
-      error,
-      errorInfo
-    )
+    // Log error to console for debugging
+    console.error('Error caught by ErrorBoundary:', error, errorInfo)
 
     this.setState({
       error,
@@ -62,7 +57,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
               <p className="text-gray-600">
-                The application encountered an unexpected error. The error has been logged for investigation.
+                The application encountered an unexpected error. Please try again or reload the page.
               </p>
             </div>
 
@@ -93,14 +88,6 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
               >
                 Try Again
-              </button>
-              <button
-                onClick={() => {
-                  logger.downloadLogs()
-                }}
-                className="flex-1 bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
-              >
-                Download Error Report
               </button>
               <button
                 onClick={() => {

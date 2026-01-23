@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Brush,
 } from 'recharts'
-import type { ChartDataPoint } from '../types'
+import type { ChartDataPoint } from '../types/energy'
 
 interface TimeSeriesChartProps {
   data: ChartDataPoint[]

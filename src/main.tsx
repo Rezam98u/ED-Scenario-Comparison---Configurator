@@ -5,16 +5,11 @@ import './index.css'
 
 // Initialize MSW in development
 if (import.meta.env.MODE === 'development') {
-  console.log('Initializing MSW in development mode...')
-  import('./mocks/browser').then(() => {
-    console.log('MSW imported successfully')
-  }).catch((error) => {
-    console.error('Failed to import MSW:', error)
+  import('./mocks/browser').catch(() => {
+    // MSW initialization failed, app will use fallback data
   })
 }
 
-// Render the app immediately
-console.log('Rendering React app...')
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

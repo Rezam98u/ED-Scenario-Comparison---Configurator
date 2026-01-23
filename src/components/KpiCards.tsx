@@ -1,4 +1,4 @@
-import type { Kpis } from '../types'
+import type { Kpis } from '../types/energy'
 
 interface KpiCardsProps {
   kpis: Kpis

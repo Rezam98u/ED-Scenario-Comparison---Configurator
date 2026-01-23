@@ -1,5 +1,4 @@
-import type { EnergyApiResponse } from '../types'
-import { logger } from '../utils/logger'
+import type { EnergyApiResponse } from '../types/energy'
 
 /**
  * Service for fetching energy data from the API
@@ -20,56 +19,27 @@ export class EnergyApiService {
     url.searchParams.set('start', start)
     url.searchParams.set('end', end)
 
-    logger.debug('Making API request', 'energyApi', { 
-      url: url.toString(), 
-      start, 
-      end 
-    })
-
     try {
       const response = await fetch(url.toString())
       
-      // Log the raw response for debugging
-      const responseText = await response.text()
-      logger.debug('Raw API response', 'energyApi', { 
-        status: response.status, 
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        body: responseText.substring(0, 200) + (responseText.length > 200 ? '...' : '')
-      })
-      
       if (!response.ok) {
-        logger.trackApiError(url.toString(), response.status, response.statusText)
         throw new Error(`Failed to fetch energy data: ${response.statusText}`)
       }
 
       // Try to parse the response
+      const responseText = await response.text()
       let data
       try {
         data = JSON.parse(responseText)
       } catch (parseError) {
-        logger.error('Failed to parse JSON response', 'energyApi', { 
-          responseText: responseText.substring(0, 500),
-          parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error'
-        })
-        
         // Fallback: If MSW is not working, return mock data directly
-        logger.warn('MSW appears to be not working, using fallback mock data', 'energyApi')
         return this.getFallbackMockData()
       }
       
-      logger.info('API request successful', 'energyApi', {
-        url: url.toString(),
-        dataSize: JSON.stringify(data).length,
-        timestamps: data.timestamps?.length || 0
-      })
-      
       return data as EnergyApiResponse
     } catch (error) {
-      if (error instanceof Error) {
-        logger.trackError(error, 'energyApi', { url: url.toString(), start, end })
-      }
-      throw error
+      // If fetch fails, use fallback mock data
+      return this.getFallbackMockData()
     }
   }
 

@@ -4,7 +4,7 @@ import type {
   ScenarioResult,
   CalculationOptions,
   Kpis,
-} from '../types'
+} from '../types/energy'
 
 /**
  * Default calculation constants used in scenario modeling
