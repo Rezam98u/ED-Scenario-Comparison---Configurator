@@ -7,8 +7,84 @@ import { ChartSkeleton, KpiCardSkeleton } from './LoadingSkeleton'
 import { ErrorState } from './ErrorState'
 import { ErrorBoundary } from './ErrorBoundary'
 import { energyApi } from '../api/energyApi'
-import { calculateScenario } from '../utils/scenarioCalculation'
-import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis } from '../types/energy'
+import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis, Baseline, ScenarioResult } from '../types/energy'
+
+// Calculate scenario based on baseline and PV capacity
+function calculateScenario(baseline: Baseline, pvKw: number): ScenarioResult {
+  if (pvKw < 0) {
+    throw new Error('PV capacity cannot be negative')
+  }
+
+  // Default calculation constants
+  const hoursPerDay = 4 // Peak sun hours per day
+  const selfConsumptionShare = 0.6 // 60% of PV generation is self-consumed
+  const co2EmissionFactor = 0.4 // kg CO2 per kWh from grid
+
+  // Calculate additional PV generation per hour
+  const additionalPvPerHour = (pvKw * hoursPerDay) / 24
+
+  const scenario: Scenario = {
+    consumption: [],
+    pv_generation: [],
+  }
+
+  // Process each timestamp
+  for (let i = 0; i < baseline.consumption.length; i++) {
+    const baseConsumption = baseline.consumption[i]
+    const basePvGeneration = baseline.pv_generation[i]
+    
+    // Calculate new PV generation
+    let newPvGeneration = basePvGeneration
+    
+    if (pvKw > 0) {
+      if (basePvGeneration > 0) {
+        // Scale additional PV based on existing generation pattern
+        const maxBasePv = Math.max(...baseline.pv_generation)
+        if (maxBasePv > 0) {
+          const scaleFactor = basePvGeneration / maxBasePv
+          newPvGeneration = basePvGeneration + (additionalPvPerHour * scaleFactor)
+        }
+      } else {
+        // Minimal generation during non-peak hours
+        newPvGeneration = additionalPvPerHour * 0.1
+      }
+    }
+    
+    // Calculate consumption reduction
+    const additionalPv = newPvGeneration - basePvGeneration
+    const consumptionReduction = Math.min(
+      additionalPv * selfConsumptionShare,
+      baseConsumption * 0.8 // Max 80% reduction
+    )
+    
+    const newConsumption = Math.max(
+      baseConsumption - consumptionReduction,
+      baseConsumption * 0.2 // Minimum 20% of original
+    )
+    
+    scenario.consumption.push(newConsumption)
+    scenario.pv_generation.push(newPvGeneration)
+  }
+
+  // Calculate KPIs
+  const totalBaselineConsumption = baseline.consumption.reduce((sum, val) => sum + val, 0)
+  const totalScenarioConsumption = scenario.consumption.reduce((sum, val) => sum + val, 0)
+  const totalPvGeneration = scenario.pv_generation.reduce((sum, val) => sum + val, 0)
+  
+  const consumptionSavings = totalBaselineConsumption - totalScenarioConsumption
+  const pvCoveragePct = totalBaselineConsumption > 0 
+    ? (totalPvGeneration / totalBaselineConsumption) * 100 
+    : 0
+  const co2SavingsTon = (consumptionSavings * co2EmissionFactor) / 1000
+
+  const kpis: Kpis = {
+    total_consumption_kwh: Math.round(totalScenarioConsumption * 10) / 10,
+    pv_coverage_pct: Math.round(pvCoveragePct * 10) / 10,
+    co2_savings_ton: Math.round(co2SavingsTon * 1000) / 1000,
+  }
+
+  return { scenario, kpis }
+}
 
 export function DashboardPage() {
   const [currentPvKw, setCurrentPvKw] = useState(10) // Default 10kW
