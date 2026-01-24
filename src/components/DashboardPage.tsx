@@ -32,10 +32,10 @@ function calculateScenario(baseline: Baseline, pvKw: number): ScenarioResult {
   for (let i = 0; i < baseline.consumption.length; i++) {
     const baseConsumption = baseline.consumption[i]
     const basePvGeneration = baseline.pv_generation[i]
-    
+
     // Calculate new PV generation
     let newPvGeneration = basePvGeneration
-    
+
     if (pvKw > 0) {
       if (basePvGeneration > 0) {
         // Scale additional PV based on existing generation pattern
@@ -49,19 +49,19 @@ function calculateScenario(baseline: Baseline, pvKw: number): ScenarioResult {
         newPvGeneration = additionalPvPerHour * 0.1
       }
     }
-    
+
     // Calculate consumption reduction
     const additionalPv = newPvGeneration - basePvGeneration
     const consumptionReduction = Math.min(
       additionalPv * selfConsumptionShare,
       baseConsumption * 0.8 // Max 80% reduction
     )
-    
+
     const newConsumption = Math.max(
       baseConsumption - consumptionReduction,
       baseConsumption * 0.2 // Minimum 20% of original
     )
-    
+
     scenario.consumption.push(newConsumption)
     scenario.pv_generation.push(newPvGeneration)
   }
@@ -70,10 +70,10 @@ function calculateScenario(baseline: Baseline, pvKw: number): ScenarioResult {
   const totalBaselineConsumption = baseline.consumption.reduce((sum, val) => sum + val, 0)
   const totalScenarioConsumption = scenario.consumption.reduce((sum, val) => sum + val, 0)
   const totalPvGeneration = scenario.pv_generation.reduce((sum, val) => sum + val, 0)
-  
+
   const consumptionSavings = totalBaselineConsumption - totalScenarioConsumption
-  const pvCoveragePct = totalBaselineConsumption > 0 
-    ? (totalPvGeneration / totalBaselineConsumption) * 100 
+  const pvCoveragePct = totalBaselineConsumption > 0
+    ? (totalPvGeneration / totalBaselineConsumption) * 100
     : 0
   const co2SavingsTon = (consumptionSavings * co2EmissionFactor) / 1000
 
@@ -97,11 +97,11 @@ export function DashboardPage() {
   const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   // Fetch energy data
-  const { 
-    data, 
-    isLoading, 
-    error, 
-    refetch 
+  const {
+    data,
+    isLoading,
+    error,
+    refetch
   } = useQuery<EnergyApiResponse>({
     queryKey: ['energy-data', startDate, endDate],
     queryFn: () => energyApi.getEnergyData(startDate, endDate),
@@ -111,6 +111,9 @@ export function DashboardPage() {
 
   // Calculate scenario whenever data or PV config changes
   useEffect(() => {
+
+    console.log(data);
+
     if (data) {
       const result = calculateScenario(data.baseline, currentPvKw)
       setCurrentScenario(result.scenario)
@@ -121,12 +124,12 @@ export function DashboardPage() {
   // Handle PV configuration changes
   const handlePvConfigApply = async (newPvKw: number) => {
     if (!data) return
-    
+
     setIsApplying(true)
-    
+
     // Simulate a brief delay for better UX
     await new Promise(resolve => setTimeout(resolve, 300))
-    
+
     setCurrentPvKw(newPvKw)
     setIsApplying(false)
   }
@@ -144,9 +147,9 @@ export function DashboardPage() {
     }))
   }, [data, currentScenario])
 
-  const handleRetry = () => {
-    refetch()
-  }
+  const handleRetry = () => refetch()
+
+
 
   // React Query handles all loading/error states
   if (isLoading) {
@@ -230,7 +233,7 @@ export function DashboardPage() {
             <ErrorBoundary context="KpiCards">
               <KpiCards kpis={currentKpis} />
             </ErrorBoundary>
-            
+
             {/* Chart */}
             <ErrorBoundary context="TimeSeriesChart">
               <TimeSeriesChart data={chartData} />
