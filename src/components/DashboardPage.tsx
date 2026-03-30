@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { TimeSeriesChart } from './TimeSeriesChart'
 import { KpiCards } from './KpiCards'
@@ -121,8 +121,8 @@ export function DashboardPage() {
     }
   }, [data, currentPvKw])
 
-  // Handle PV configuration changes
-  const handlePvConfigApply = async (newPvKw: number) => {
+  // Handle PV configuration changes via useCallback
+  const handlePvConfigApply = useCallback(async (newPvKw: number) => {
     if (!data) return
 
     setIsApplying(true)
@@ -132,7 +132,7 @@ export function DashboardPage() {
 
     setCurrentPvKw(newPvKw)
     setIsApplying(false)
-  }
+  }, [data])
 
   // Prepare chart data
   const chartData: ChartDataPoint[] = useMemo(() => {

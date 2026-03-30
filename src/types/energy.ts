@@ -1,15 +1,12 @@
-/**
- * TypeScript interfaces for Energy Dashboard data structures
- */
+//  TypeScript interfaces for Energy Dashboard data structures
 
 export interface TimeSeries {
   consumption: number[]
   pv_generation: number[]
 }
 
-export interface Baseline extends TimeSeries {}
-
-export interface Scenario extends TimeSeries {}
+export interface Baseline extends TimeSeries { }
+export interface Scenario extends TimeSeries { }
 
 export interface Kpis {
   total_consumption_kwh: number
