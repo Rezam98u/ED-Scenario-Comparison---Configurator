@@ -147,7 +147,6 @@ export function DashboardPage() {
   const handleRetry = () => refetch()
 
 
-
   // React Query handles all loading/error states
   if (isLoading) {
     return (
