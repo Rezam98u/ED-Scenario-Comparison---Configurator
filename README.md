@@ -11,25 +11,44 @@ An interactive dashboard for comparing energy scenarios, featuring baseline vs p
 - **KPI Cards**: Track Total Consumption (kWh), PV Coverage (%), and CO₂ Savings (t)
 - **PV Configurator**: Adjust PV capacity with real-time scenario calculation
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
-- **Mock API**: MSW-powered mock service for development and testing
+- **REST API**: Express + PostgreSQL (Prisma) for baseline energy data
 - **Type Safety**: Full TypeScript coverage for all data structures
 - **Comprehensive Logging**: Centralized error tracking with real-time console and persistence
 
 ## Quick Start
 
+**Prerequisites:** Node.js, Docker (recommended for PostgreSQL), or a local Postgres instance.
+
 ```bash
-# Install dependencies
+# 1) Start PostgreSQL (from repo root)
+docker compose up -d
+
+# 2) Configure the API (copy and edit if your DB credentials differ)
+copy server\.env.example server\.env   # Windows
+# cp server/.env.example server/.env   # macOS / Linux
+
+# 3) Install API dependencies, apply migrations, seed demo data
+cd server
 npm install
+npx prisma migrate deploy
+npm run db:seed
+cd ..
 
-# Start development server
+# 4) Install frontend dependencies and run Vite + API together
+npm install
 npm run dev
-
-# Open browser to http://localhost:5173
 ```
+
+Open **http://localhost:5173** (Vite proxies `/api` to the API on port **4000**).
+
+- Run only the UI: `npm run dev:web` (still needs the API for data unless you point `VITE_API_URL` at another host).
+- Run only the API: `npm run dev:api`
 
 ## Available Scripts
 
-- `npm run dev` - Start development server
+- `npm run dev` - Start Vite and the Express API together
+- `npm run dev:web` - Vite only
+- `npm run dev:api` - API only (`server/`)
 - `npm run build` - Build for production
 - `npm test` - Run unit tests
 - `npm run lint` - Run ESLint
@@ -52,19 +71,15 @@ src/
 │   ├── ErrorBoundary.tsx    # React error boundary
 │   ├── ErrorConsole.tsx     # Error logging console
 │   └── ErrorDemo.tsx        # Development error testing
-├── services/            # API services
+├── api/                 # API client
 │   └── energyApi.ts         # Energy data fetching
-├── utils/               # Utility functions
-│   ├── scenarioCalculation.ts # Scenario calculation logic
-│   ├── logger.ts            # Centralized logging service
-│   └── useLogger.ts         # React logging hook
 ├── types/               # TypeScript interfaces
 │   └── energy.ts            # Energy data types
-├── mocks/               # MSW mock setup
-│   ├── handlers.ts          # API mock handlers
-│   └── browser.ts           # MSW browser setup
-└── test/                # Test configuration
-    └── setup.ts             # Test setup file
+└── ...
+
+server/                  # Express + Prisma backend
+├── prisma/                # Schema, migrations, seed
+└── src/                   # API routes and app entry
 ```
 
 ### Data Flow
@@ -144,33 +159,11 @@ interface EnergyApiResponse {
 }
 ```
 
-## Replacing Mock API with Real Backend
+## Production deployment notes
 
-To connect to a real API:
-
-1. **Update API Base URL**:
-   ```typescript
-   // src/services/energyApi.ts
-   const energyApi = new EnergyApiService('https://your-api-domain.com')
-   ```
-
-2. **Remove MSW Setup**:
-   ```typescript
-   // src/main.tsx - Remove or conditionally disable
-   // await import('./mocks/browser')
-   ```
-
-3. **Handle CORS** (if needed):
-   ```typescript
-   // Add proxy to vite.config.ts
-   export default defineConfig({
-     server: {
-       proxy: {
-         '/api': 'http://localhost:3000'
-       }
-     }
-   })
-   ```
+- The frontend calls `/api/energy` by default. Serve the built static files and the Express API behind the same origin, or set **`VITE_API_URL`** to the public API base URL (see `.env.example`).
+- Configure the API **`DATABASE_URL`** and run **`npm run db:migrate`** (or `prisma migrate deploy`) on the server before starting the process.
+- Enable CORS on the API only for the domains that need it (see `server/src/index.ts`).
 
 ## Error Logging & Monitoring
 

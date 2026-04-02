@@ -111,9 +111,6 @@ export function DashboardPage() {
 
   // Calculate scenario whenever data or PV config changes
   useEffect(() => {
-
-    console.log(data);
-
     if (data) {
       const result = calculateScenario(data.baseline, currentPvKw)
       setCurrentScenario(result.scenario)

@@ -1,0 +1,24 @@
+// MVP: one row holds a full Energy API payload as JSON columns (easy to evolve later).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model EnergyDataset {
+  id          String   @id @default(cuid())
+  /// Human label for admin / debugging
+  label       String   @default("default")
+  /// Inclusive range this dataset applies to (used for simple overlap matching)
+  rangeStart  DateTime @db.Date
+  rangeEnd    DateTime @db.Date
+  timestamps  Json
+  baseline    Json
+  scenario    Json
+  kpis        Json
+  createdAt   DateTime @default(now())
+}
