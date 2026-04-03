@@ -1,4 +1,4 @@
-import type { EnergyApiResponse } from '../types/energy'
+import type { EnergyApiResponse, Kpis, SavedScenario } from '../types/energy'
 
 function apiBaseUrl(): string {
   const fromEnv = import.meta.env.VITE_API_URL as string | undefined
@@ -35,6 +35,32 @@ export class EnergyApiService {
     }
 
     return response.json() as Promise<EnergyApiResponse>
+  }
+
+  async getSavedScenarios(): Promise<SavedScenario[]> {
+    const origin = apiBaseUrl() || window.location.origin
+    const response = await fetch(`${origin}/api/energy/scenarios`)
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch saved scenarios: ${response.status}`)
+    }
+
+    return response.json() as Promise<SavedScenario[]>
+  }
+
+  async saveScenario(pvKw: number, kpis: Kpis): Promise<SavedScenario> {
+    const origin = apiBaseUrl() || window.location.origin
+    const response = await fetch(`${origin}/api/energy/scenarios`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pvKw, kpis }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to save scenario: ${response.status}`)
+    }
+
+    return response.json() as Promise<SavedScenario>
   }
 }
 

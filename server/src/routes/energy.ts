@@ -3,6 +3,38 @@ import { prisma } from '../lib/prisma.js'
 
 export const energyRouter = Router()
 
+// In-memory store for saved scenarios (resets on server restart — MVP)
+interface SavedScenario {
+  id: string
+  pvKw: number
+  kpis: Record<string, number>
+  savedAt: string
+}
+const savedScenarios: SavedScenario[] = []
+
+energyRouter.get('/energy/scenarios', (_req, res) => {
+  res.json(savedScenarios)
+})
+
+energyRouter.post('/energy/scenarios', (req, res) => {
+  const { pvKw, kpis } = req.body as { pvKw?: unknown; kpis?: unknown }
+
+  if (typeof pvKw !== 'number' || typeof kpis !== 'object' || kpis === null) {
+    res.status(400).json({ error: 'pvKw (number) and kpis (object) are required' })
+    return
+  }
+
+  const scenario: SavedScenario = {
+    id: crypto.randomUUID(),
+    pvKw,
+    kpis: kpis as Record<string, number>,
+    savedAt: new Date().toISOString(),
+  }
+
+  savedScenarios.unshift(scenario)
+  res.status(201).json(scenario)
+})
+
 energyRouter.get('/energy', async (req, res) => {
   const start = req.query.start
   const end = req.query.end

@@ -7,11 +7,11 @@ interface PvConfiguratorProps {
   className?: string
 }
 
-export function PvConfigurator({ 
-  currentPvKw, 
-  onApply, 
+export function PvConfigurator({
+  currentPvKw,
+  onApply,
   isLoading = false,
-  className = '' 
+  className = ''
 }: PvConfiguratorProps) {
   const [pvKw, setPvKw] = useState(currentPvKw)
 
@@ -26,9 +26,7 @@ export function PvConfigurator({
     }
   }
 
-  const handleApply = () => {
-    onApply(pvKw)
-  }
+  const handleApply = () => onApply(pvKw)
 
   const hasChanges = pvKw !== currentPvKw
 
@@ -37,7 +35,7 @@ export function PvConfigurator({
       <h3 className="text-lg font-semibold text-gray-900 mb-4">
         PV Configuration
       </h3>
-      
+
       <div className="space-y-4">
         <div>
           <label htmlFor="pv-capacity" className="block text-sm font-medium text-gray-700 mb-2">
@@ -73,11 +71,10 @@ export function PvConfigurator({
         <button
           onClick={handleApply}
           disabled={!hasChanges || isLoading}
-          className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
-            hasChanges && !isLoading
-              ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
+          className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${hasChanges && !isLoading
+            ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
         >
           {isLoading ? 'Applying...' : 'Apply Changes'}
         </button>

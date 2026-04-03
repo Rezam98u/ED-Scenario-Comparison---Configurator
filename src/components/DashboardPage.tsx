@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TimeSeriesChart } from './TimeSeriesChart'
 import { KpiCards } from './KpiCards'
 import { PvConfigurator } from './PvConfigurator'
@@ -7,13 +7,11 @@ import { ChartSkeleton, KpiCardSkeleton } from './LoadingSkeleton'
 import { ErrorState } from './ErrorState'
 import { ErrorBoundary } from './ErrorBoundary'
 import { energyApi } from '../api/energyApi'
-import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis, Baseline, ScenarioResult } from '../types/energy'
+import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis, Baseline, ScenarioResult, SavedScenario } from '../types/energy'
 
 // Calculate scenario based on baseline and PV capacity
 function calculateScenario(baseline: Baseline, pvKw: number): ScenarioResult {
-  if (pvKw < 0) {
-    throw new Error('PV capacity cannot be negative')
-  }
+  if (pvKw < 0) { throw new Error('PV capacity cannot be negative') }
 
   // Default calculation constants
   const hoursPerDay = 4 // Peak sun hours per day
@@ -90,7 +88,6 @@ export function DashboardPage() {
   const [currentPvKw, setCurrentPvKw] = useState(10) // Default 10kW
   const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null)
   const [currentKpis, setCurrentKpis] = useState<Kpis | null>(null)
-  const [isApplying, setIsApplying] = useState(false)
 
   // Calculate date range (last 7 days)
   const endDate = new Date().toISOString().split('T')[0]
@@ -105,11 +102,55 @@ export function DashboardPage() {
   } = useQuery<EnergyApiResponse>({
     queryKey: ['energy-data', startDate, endDate],
     queryFn: () => energyApi.getEnergyData(startDate, endDate),
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
-    retry: 1,
+    // staleTime and gcTime come from QueryClient defaults in App.tsx
   })
 
-  // Calculate scenario whenever data or PV config changes
+  const queryClient = useQueryClient()
+
+  // Fetch previously saved scenarios
+  const { data: savedScenarios = [] } = useQuery<SavedScenario[]>({
+    queryKey: ['saved-scenarios'],
+    queryFn: () => energyApi.getSavedScenarios(),
+  })
+
+  // Save current scenario to the server
+  const saveScenarioMutation = useMutation({
+    mutationFn: () => energyApi.saveScenario(currentPvKw, currentKpis!),
+
+    // OPTIMISTIC UPDATE: add the scenario to the list immediately, before the server responds
+    onMutate: async () => {
+      // Cancel any outgoing refetches so they don't overwrite our optimistic entry
+      await queryClient.cancelQueries({ queryKey: ['saved-scenarios'] })
+
+      // Snapshot the current list so we can roll back if the request fails
+      const previous = queryClient.getQueryData<SavedScenario[]>(['saved-scenarios'])
+
+      // Add a temporary optimistic entry to the cache right now
+      const optimistic: SavedScenario = {
+        id: `optimistic-${Date.now()}`,
+        pvKw: currentPvKw,
+        kpis: currentKpis!,
+        savedAt: new Date().toISOString(),
+      }
+      queryClient.setQueryData<SavedScenario[]>(['saved-scenarios'], (old = []) => [optimistic, ...old])
+
+      return { previous } // passed to onError as context
+    },
+
+    onError: (_err, _vars, context) => {
+      // Roll back to the snapshot if the server call fails
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(['saved-scenarios'], context.previous)
+      }
+    },
+
+    onSuccess: () => {
+      // Replace the optimistic entry with the real data from the server
+      queryClient.invalidateQueries({ queryKey: ['saved-scenarios'] })
+    },
+  })
+
+  // Recalculate scenario whenever energy data or PV capacity changes
   useEffect(() => {
     if (data) {
       const result = calculateScenario(data.baseline, currentPvKw)
@@ -118,18 +159,9 @@ export function DashboardPage() {
     }
   }, [data, currentPvKw])
 
-  // Handle PV configuration changes via useCallback
-  const handlePvConfigApply = useCallback(async (newPvKw: number) => {
-    if (!data) return
-
-    setIsApplying(true)
-
-    // Simulate a brief delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 300))
-
+  const handlePvConfigApply = useCallback((newPvKw: number) => {
     setCurrentPvKw(newPvKw)
-    setIsApplying(false)
-  }, [data])
+  }, [])
 
   // Prepare chart data
   const chartData: ChartDataPoint[] = useMemo(() => {
@@ -147,7 +179,6 @@ export function DashboardPage() {
   const handleRetry = () => refetch()
 
 
-  // React Query handles all loading/error states
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -237,14 +268,61 @@ export function DashboardPage() {
           </div>
 
           {/* Sidebar */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-4">
             <ErrorBoundary context="PvConfigurator">
               <PvConfigurator
                 currentPvKw={currentPvKw}
                 onApply={handlePvConfigApply}
-                isLoading={isApplying}
               />
             </ErrorBoundary>
+
+            {/* Save the current scenario to the server */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Save Scenario</h3>
+              <button
+                onClick={() => saveScenarioMutation.mutate()}
+                disabled={saveScenarioMutation.isPending || !currentKpis}
+                className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
+                  !saveScenarioMutation.isPending && currentKpis
+                    ? 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {saveScenarioMutation.isPending ? 'Saving...' : `Save ${currentPvKw} kW Scenario`}
+              </button>
+              {saveScenarioMutation.isError && (
+                <p className="text-red-500 text-sm mt-2">Failed to save. Please try again.</p>
+              )}
+              {saveScenarioMutation.isSuccess && (
+                <p className="text-green-600 text-sm mt-2">Scenario saved!</p>
+              )}
+            </div>
+
+            {/* List of saved scenarios — updates optimistically on save */}
+            {savedScenarios.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Saved Scenarios ({savedScenarios.length})
+                </h3>
+                <div className="space-y-2">
+                  {savedScenarios.map((s) => (
+                    <div
+                      key={s.id}
+                      className={`p-3 rounded-md border text-sm ${
+                        s.id.startsWith('optimistic-')
+                          ? 'border-dashed border-blue-300 bg-blue-50 opacity-70'
+                          : 'border-gray-200 bg-gray-50'
+                      }`}
+                    >
+                      <div className="font-medium text-gray-800">{s.pvKw} kW</div>
+                      <div className="text-gray-500 text-xs mt-1">
+                        Coverage: {s.kpis.pv_coverage_pct}% · CO₂: {s.kpis.co2_savings_ton} t
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

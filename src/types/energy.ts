@@ -42,3 +42,10 @@ export interface ChartDataPoint {
   scenario_consumption: number
   scenario_pv: number
 }
+
+export interface SavedScenario {
+  id: string
+  pvKw: number
+  kpis: Kpis
+  savedAt: string
+}
