@@ -2,7 +2,6 @@ import type { Kpis } from '../types/energy'
 
 interface KpiCardsProps {
   kpis: Kpis
-  className?: string
 }
 
 interface KpiCardProps {
@@ -10,12 +9,11 @@ interface KpiCardProps {
   value: string | number
   unit: string
   change?: number
-  className?: string
 }
 
-function KpiCard({ title, value, unit, change, className = '' }: KpiCardProps) {
+function KpiCard({ title, value, unit, change }: KpiCardProps) {
   return (
-    <div className={`bg-white rounded-lg shadow-sm border p-6 ${className}`}>
+    <div className="bg-white rounded-lg shadow-sm border p-6">
       <h3 className="text-sm font-medium text-gray-600 mb-2">{title}</h3>
       <div className="flex items-baseline justify-between">
         <div>
@@ -32,9 +30,9 @@ function KpiCard({ title, value, unit, change, className = '' }: KpiCardProps) {
   )
 }
 
-export function KpiCards({ kpis, className = '' }: KpiCardsProps) {
+export function KpiCards({ kpis }: KpiCardsProps) {
   return (
-    <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${className}`}>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <KpiCard
         title="Total Consumption"
         value={kpis.total_consumption_kwh.toLocaleString()}

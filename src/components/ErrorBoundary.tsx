@@ -1,20 +1,15 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react'
+import { Component, ErrorInfo, ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
   fallback?: ReactNode
-  context?: string
 }
 
 interface State {
   hasError: boolean
   error?: Error
-  errorInfo?: ErrorInfo
 }
 
-/**
- * Global Error Boundary to catch React component errors
- */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props)
@@ -22,30 +17,17 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return {
-      hasError: true,
-      error,
-    }
+    return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error to console for debugging
     console.error('Error caught by ErrorBoundary:', error, errorInfo)
-
-    this.setState({
-      error,
-      errorInfo,
-    })
   }
 
   render() {
     if (this.state.hasError) {
-      // Custom fallback UI
-      if (this.props.fallback) {
-        return this.props.fallback
-      }
+      if (this.props.fallback) return this.props.fallback
 
-      // Default error UI
       return (
         <div className="min-h-screen bg-red-50 flex items-center justify-center p-6">
           <div className="bg-white rounded-lg shadow-lg border border-red-200 p-8 max-w-2xl w-full">
@@ -82,17 +64,13 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                onClick={() => {
-                  this.setState({ hasError: false, error: undefined, errorInfo: undefined })
-                }}
+                onClick={() => this.setState({ hasError: false, error: undefined })}
                 className="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
               >
                 Try Again
               </button>
               <button
-                onClick={() => {
-                  window.location.reload()
-                }}
+                onClick={() => window.location.reload()}
                 className="flex-1 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors"
               >
                 Reload Page
@@ -105,22 +83,4 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return this.props.children
   }
-}
-
-/**
- * Higher-order component to wrap components with error boundary
- */
-export function withErrorBoundary<T extends object>(
-  Component: React.ComponentType<T>,
-  context?: string
-) {
-  const WrappedComponent = (props: T) => (
-    <ErrorBoundary context={context}>
-      <Component {...props} />
-    </ErrorBoundary>
-  )
-  
-  WrappedComponent.displayName = `withErrorBoundary(${Component.displayName || Component.name})`
-  
-  return WrappedComponent
 }

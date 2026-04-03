@@ -1,22 +1,15 @@
 import type { EnergyApiResponse, Kpis, SavedScenario } from '../types/energy'
 
-function apiBaseUrl(): string {
-  const fromEnv = import.meta.env.VITE_API_URL as string | undefined
-  if (fromEnv) return fromEnv.replace(/\/$/, '')
-  return ''
-}
-
-// Service for fetching energy data from the API
-
 export class EnergyApiService {
-  /**
-   * Fetches energy data for a given date range
-   * @param start - Start date in YYYY-MM-DD format
-   * @param end - End date in YYYY-MM-DD format
-   */
+  private readonly origin: string
+
+  constructor() {
+    const fromEnv = import.meta.env.VITE_API_URL as string | undefined
+    this.origin = fromEnv ? fromEnv.replace(/\/$/, '') : window.location.origin
+  }
+
   async getEnergyData(start: string, end: string): Promise<EnergyApiResponse> {
-    const origin = apiBaseUrl() || window.location.origin
-    const url = new URL('/api/energy', origin)
+    const url = new URL('/api/energy', this.origin)
     url.searchParams.set('start', start)
     url.searchParams.set('end', end)
 
@@ -38,8 +31,7 @@ export class EnergyApiService {
   }
 
   async getSavedScenarios(): Promise<SavedScenario[]> {
-    const origin = apiBaseUrl() || window.location.origin
-    const response = await fetch(`${origin}/api/energy/scenarios`)
+    const response = await fetch(`${this.origin}/api/energy/scenarios`)
 
     if (!response.ok) {
       throw new Error(`Failed to fetch saved scenarios: ${response.status}`)
@@ -49,8 +41,7 @@ export class EnergyApiService {
   }
 
   async saveScenario(pvKw: number, kpis: Kpis): Promise<SavedScenario> {
-    const origin = apiBaseUrl() || window.location.origin
-    const response = await fetch(`${origin}/api/energy/scenarios`, {
+    const response = await fetch(`${this.origin}/api/energy/scenarios`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pvKw, kpis }),

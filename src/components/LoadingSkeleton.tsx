@@ -11,6 +11,11 @@ export function LoadingSkeleton({ className = '', style }: LoadingSkeletonProps)
   )
 }
 
+// Stable heights — no Math.random() in render to avoid flicker on re-renders
+const SKELETON_BAR_HEIGHTS = [55, 72, 40, 80, 65, 30, 50, 75, 45, 60,
+                               35, 70, 55, 42, 68, 78, 33, 58, 47, 63,
+                               38, 72, 50, 44]
+
 export function ChartSkeleton() {
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6">
@@ -19,11 +24,11 @@ export function ChartSkeleton() {
         <LoadingSkeleton className="h-4 w-32" />
       </div>
       <div className="h-80 flex items-end justify-between space-x-1">
-        {Array.from({ length: 24 }).map((_, i) => (
-          <LoadingSkeleton 
-            key={i} 
+        {SKELETON_BAR_HEIGHTS.map((height, i) => (
+          <LoadingSkeleton
+            key={i}
             className="w-full"
-            style={{ height: `${Math.random() * 60 + 20}%` }}
+            style={{ height: `${height}%` }}
           />
         ))}
       </div>

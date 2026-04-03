@@ -3,16 +3,9 @@ import { useState } from 'react'
 interface PvConfiguratorProps {
   currentPvKw: number
   onApply: (pvKw: number) => void
-  isLoading?: boolean
-  className?: string
 }
 
-export function PvConfigurator({
-  currentPvKw,
-  onApply,
-  isLoading = false,
-  className = ''
-}: PvConfiguratorProps) {
+export function PvConfigurator({ currentPvKw, onApply }: PvConfiguratorProps) {
   const [pvKw, setPvKw] = useState(currentPvKw)
 
   const handleSliderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -31,7 +24,7 @@ export function PvConfigurator({
   const hasChanges = pvKw !== currentPvKw
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm border p-6 ${className}`}>
+    <div className="bg-white rounded-lg shadow-sm border p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">
         PV Configuration
       </h3>
@@ -70,13 +63,14 @@ export function PvConfigurator({
 
         <button
           onClick={handleApply}
-          disabled={!hasChanges || isLoading}
-          className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${hasChanges && !isLoading
-            ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
+          disabled={!hasChanges}
+          className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
+            hasChanges
+              ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
         >
-          {isLoading ? 'Applying...' : 'Apply Changes'}
+          Apply Changes
         </button>
 
         {hasChanges && (

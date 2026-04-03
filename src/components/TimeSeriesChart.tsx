@@ -13,7 +13,6 @@ import type { ChartDataPoint } from '../types/energy'
 
 interface TimeSeriesChartProps {
   data: ChartDataPoint[]
-  className?: string
 }
 
 interface CustomTooltipProps {
@@ -45,15 +44,17 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
         <p className="font-medium text-gray-900">{`${formattedDate} ${formattedTime}`}</p>
         <div className="mt-2 space-y-1">
           {payload.map((entry, index) => {
-            let label = ''
-            if (entry.dataKey === 'baseline_consumption') label = 'Baseline Consumption'
-            else if (entry.dataKey === 'scenario_consumption') label = 'Scenario Consumption'
-            else if (entry.dataKey === 'baseline_pv') label = 'Baseline PV'
-            else if (entry.dataKey === 'scenario_pv') label = 'Scenario PV'
+            const LABELS: Record<string, string> = {
+              baseline_consumption: 'Baseline Consumption',
+              scenario_consumption: 'Scenario Consumption',
+              baseline_pv: 'Baseline PV',
+              scenario_pv: 'Scenario PV',
+            }
+            const entryLabel = LABELS[entry.dataKey] ?? entry.dataKey
 
             return (
               <p key={index} style={{ color: entry.color }} className="text-sm">
-                {label}: {entry.value.toFixed(1)} kWh
+                {entryLabel}: {entry.value.toFixed(1)} kWh
               </p>
             )
           })}
@@ -74,9 +75,9 @@ const formatXAxisTick = (tickItem: string) => {
   })
 }
 
-export function TimeSeriesChart({ data, className = '' }: TimeSeriesChartProps) {
+export function TimeSeriesChart({ data }: TimeSeriesChartProps) {
   return (
-    <div className={`bg-white rounded-lg shadow-sm border p-6 ${className}`}>
+    <div className="bg-white rounded-lg shadow-sm border p-6">
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-2">
           Energy Consumption & PV Generation
