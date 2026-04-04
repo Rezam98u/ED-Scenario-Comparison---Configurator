@@ -37,11 +37,10 @@ function SaveScenarioCard({ pvKw, kpis, isPending, isError, isSuccess, onSave }:
       <button
         onClick={onSave}
         disabled={isPending || !kpis}
-        className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
-          !isPending && kpis
-            ? 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2'
-            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-        }`}
+        className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${!isPending && kpis
+          ? 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2'
+          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
       >
         {isPending ? 'Saving...' : `Save ${pvKw} kW Scenario`}
       </button>
@@ -63,11 +62,10 @@ function SavedScenariosList({ scenarios }: { scenarios: SavedScenario[] }) {
         {scenarios.map((s) => (
           <div
             key={s.id}
-            className={`p-3 rounded-md border text-sm ${
-              s.id.startsWith('optimistic-')
-                ? 'border-dashed border-blue-300 bg-blue-50 opacity-70'
-                : 'border-gray-200 bg-gray-50'
-            }`}
+            className={`p-3 rounded-md border text-sm ${s.id.startsWith('optimistic-')
+              ? 'border-dashed border-blue-300 bg-blue-50 opacity-70'
+              : 'border-gray-200 bg-gray-50'
+              }`}
           >
             <div className="font-medium text-gray-800">{s.pvKw} kW</div>
             <div className="text-gray-500 text-xs mt-1">
@@ -123,8 +121,8 @@ export function DashboardPage() {
       }
     },
 
-    onSuccess: () => {queryClient.invalidateQueries({ queryKey: ['saved-scenarios'] }) }
-   
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['saved-scenarios'] }) }
+
   })
 
   useEffect(() => {

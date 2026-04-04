@@ -1,6 +1,6 @@
 import type { EnergyApiResponse, Kpis, SavedScenario } from '../types/energy'
 
-const BASE_URL =  window.location.origin
+const BASE_URL = window.location.origin
 
 export const energyApi = {
   async getEnergyData(): Promise<EnergyApiResponse> {
@@ -23,11 +23,7 @@ export const energyApi = {
 
   async getSavedScenarios(): Promise<SavedScenario[]> {
     const response = await fetch(`${BASE_URL}/api/energy/scenarios`)
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch saved scenarios: ${response.status}`)
-    }
-
+    if (!response.ok) { throw new Error(`Failed to fetch saved scenarios: ${response.status}`) }
     return response.json() as Promise<SavedScenario[]>
   },
 

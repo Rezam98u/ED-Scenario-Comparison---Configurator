@@ -12,9 +12,7 @@ interface SavedScenario {
 }
 const savedScenarios: SavedScenario[] = []
 
-energyRouter.get('/energy/scenarios', (_req, res) => {
-  res.json(savedScenarios)
-})
+energyRouter.get('/energy/scenarios', (_req, res) => { res.json(savedScenarios) })
 
 energyRouter.post('/energy/scenarios', (req, res) => {
   const { pvKw, kpis } = req.body as { pvKw?: unknown; kpis?: unknown }

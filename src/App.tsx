@@ -2,8 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { DashboardPage } from './components/DashboardPage'
 
-// staleTime: how long cached data is considered fresh (no refetch during this window)
-// gcTime:    how long unused cache entries are kept in memory before being removed
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
