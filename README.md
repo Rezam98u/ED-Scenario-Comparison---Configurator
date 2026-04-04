@@ -30,21 +30,27 @@ A full-stack web application for visualising energy consumption and PV (photovol
 ---
 
 ## Project Structure
-├── mock-data/                    # Seed JSON (7-day hourly dataset)
+
+├── mock-data/ # Seed JSON (7-day hourly dataset)
 ├── server/
-│   ├── prisma/
-│   │   ├── migrations/           # SQL migrations
-│   │   ├── schema.prisma         # Prisma schema
-│   │   └── seed.ts               # DB seeder
-│   └── src/
-│       ├── routes/energy.ts      # API routes
-│       ├── lib/prisma.ts         # Prisma client singleton
-│       └── index.ts              # Express entry point
+│ ├── prisma/
+│ │ ├── migrations/ # SQL migrations
+│ │ ├── schema.prisma # Prisma schema
+│ │ └── seed.ts # DB seeder
+│ └── src/
+│ ├── routes/
+│ │ └── energy.ts # API routes
+│ ├── lib/
+│ │ └── prisma.ts # Prisma client singleton
+│ └── index.ts # Express entry point
 └── src/
-├── api/energyApi.ts          # Fetch wrappers
-├── components/               # React components
-├── types/energy.ts           # Shared TypeScript types
-└── utils/calculateScenario.ts # PV scenario calculation logic
+├── api/
+│ └── energyApi.ts # Fetch wrappers
+├── components/ # React components
+├── types/
+│ └── energy.ts # Shared TypeScript types
+└── utils/
+└── calculateScenario.ts # PV scenario calculation logic
 
 ---
 
