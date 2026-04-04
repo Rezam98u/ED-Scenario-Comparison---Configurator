@@ -10,6 +10,7 @@ import { energyApi } from '../api/energyApi'
 import { calculateScenario } from '../utils/calculateScenario'
 import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis, SavedScenario } from '../types/energy'
 
+
 // ─── Small local components ──────────────────────────────────────────────────
 
 function PageHeader({ subtitle }: { subtitle: string }) {
