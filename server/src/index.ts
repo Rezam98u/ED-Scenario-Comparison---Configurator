@@ -18,6 +18,6 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true })
 })
 
-app.listen(port, () => {
-  console.log(`Energy API listening on http://localhost:${port}`)
-})
+app.listen(port, () => console.log(`Energy API listening on http://localhost:${port}`))
+
+

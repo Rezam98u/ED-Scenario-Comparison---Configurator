@@ -1,15 +1,10 @@
 import type { EnergyApiResponse, Kpis, SavedScenario } from '../types/energy'
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined)
-  ?.replace(/\/$/, '') ?? window.location.origin
+const BASE_URL =  window.location.origin
 
 export const energyApi = {
-  async getEnergyData(start: string, end: string): Promise<EnergyApiResponse> {
-    const url = new URL('/api/energy', BASE_URL)
-    url.searchParams.set('start', start)
-    url.searchParams.set('end', end)
-
-    const response = await fetch(url.toString())
+  async getEnergyData(): Promise<EnergyApiResponse> {
+    const response = await fetch(`${BASE_URL}/api/energy`)
 
     if (!response.ok) {
       const text = await response.text()

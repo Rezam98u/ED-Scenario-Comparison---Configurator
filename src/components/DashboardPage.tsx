@@ -87,12 +87,9 @@ export function DashboardPage() {
   const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null)
   const [currentKpis, setCurrentKpis] = useState<Kpis | null>(null)
 
-  const endDate = new Date().toISOString().split('T')[0]
-  const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-
   const { data, isLoading, error, refetch } = useQuery<EnergyApiResponse>({
-    queryKey: ['energy-data', startDate, endDate],
-    queryFn: () => energyApi.getEnergyData(startDate, endDate),
+    queryKey: ['energy-data'],
+    queryFn: () => energyApi.getEnergyData(),
   })
 
   const queryClient = useQueryClient()

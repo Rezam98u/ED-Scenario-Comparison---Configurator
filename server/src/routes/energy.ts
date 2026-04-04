@@ -35,38 +35,23 @@ energyRouter.post('/energy/scenarios', (req, res) => {
   res.status(201).json(scenario)
 })
 
-energyRouter.get('/energy', async (req, res) => {
-  const start = req.query.start
-  const end = req.query.end
+energyRouter.get('/energy', async (_req, res) => {
+  try {
+    const row = await prisma.energyDataset.findFirst({ orderBy: { createdAt: 'asc' } })
 
-  if (typeof start !== 'string' || typeof end !== 'string') {
-    res.status(400).json({
-      error: 'Query params "start" and "end" are required (YYYY-MM-DD).',
+    if (!row) {
+      res.status(404).json({ error: 'No energy data. Run migrations and seed.' })
+      return
+    }
+
+    res.json({
+      timestamps: row.timestamps,
+      baseline: row.baseline,
+      scenario: row.scenario,
+      kpis: row.kpis,
     })
-    return
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Database error. Check DATABASE_URL and that PostgreSQL is running.' })
   }
-
-  const startDate = new Date(`${start}T00:00:00.000Z`)
-  const endDate = new Date(`${end}T00:00:00.000Z`)
-
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-    res.status(400).json({ error: 'Invalid date. Use YYYY-MM-DD.' })
-    return
-  }
-
-  const rows = await prisma.energyDataset.findMany({ orderBy: { createdAt: 'asc' } })
-  const overlapping = rows.find((row) => row.rangeStart <= endDate && row.rangeEnd >= startDate)
-  const row = overlapping ?? rows[0]
-
-  if (!row) {
-    res.status(404).json({ error: 'No energy data. Create the database, run migrations, then seed.' })
-    return
-  }
-
-  res.json({
-    timestamps: row.timestamps,
-    baseline: row.baseline,
-    scenario: row.scenario,
-    kpis: row.kpis,
-  })
 })
