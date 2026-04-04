@@ -29,7 +29,6 @@ A full-stack web application for visualising energy consumption and PV (photovol
 
 ---
 
-
 ## Project Structure
 ├── mock-data/                    # Seed JSON (7-day hourly dataset)
 ├── server/
