@@ -1,3 +1,4 @@
+import React from "react"
 import {
   LineChart,
   Line,
@@ -75,7 +76,7 @@ const formatXAxisTick = (tickItem: string) => {
   })
 }
 
-export function TimeSeriesChart({ data }: TimeSeriesChartProps) {
+export const TimeSeriesChart = React.memo(({ data }: TimeSeriesChartProps) => {
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6">
       <div className="mb-6">
@@ -90,19 +91,19 @@ export function TimeSeriesChart({ data }: TimeSeriesChartProps) {
       <ResponsiveContainer width="100%" height={400}>
         <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 60 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis 
+          <XAxis
             dataKey="timestamp"
             tickFormatter={formatXAxisTick}
             angle={-45}
             textAnchor="end"
             height={60}
           />
-          <YAxis 
+          <YAxis
             label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
-          
+
           {/* Consumption Lines */}
           <Line
             type="monotone"
@@ -121,7 +122,7 @@ export function TimeSeriesChart({ data }: TimeSeriesChartProps) {
             name="Scenario Consumption"
             dot={false}
           />
-          
+
           {/* PV Generation Lines */}
           <Line
             type="monotone"
@@ -140,10 +141,10 @@ export function TimeSeriesChart({ data }: TimeSeriesChartProps) {
             name="Scenario PV"
             dot={false}
           />
-          
+
           {/* Brush for zooming */}
-          <Brush 
-            dataKey="timestamp" 
+          <Brush
+            dataKey="timestamp"
             height={30}
             tickFormatter={formatXAxisTick}
           />
@@ -151,4 +152,4 @@ export function TimeSeriesChart({ data }: TimeSeriesChartProps) {
       </ResponsiveContainer>
     </div>
   )
-}
+})

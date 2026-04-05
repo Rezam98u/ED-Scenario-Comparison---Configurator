@@ -8,12 +8,12 @@ interface PvConfiguratorProps {
 export function PvConfigurator({ currentPvKw, onApply }: PvConfiguratorProps) {
   const [pvKw, setPvKw] = useState(currentPvKw)
 
-  const handleSliderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setPvKw(Number(event.target.value))
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPvKw(Number(e.target.value))
   }
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Number(event.target.value)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(e.target.value)
     if (!isNaN(value) && value >= 0 && value <= 100) {
       setPvKw(value)
     }
@@ -64,11 +64,10 @@ export function PvConfigurator({ currentPvKw, onApply }: PvConfiguratorProps) {
         <button
           onClick={handleApply}
           disabled={!hasChanges}
-          className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
-            hasChanges
+          className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${hasChanges
               ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
+            }`}
         >
           Apply Changes
         </button>
