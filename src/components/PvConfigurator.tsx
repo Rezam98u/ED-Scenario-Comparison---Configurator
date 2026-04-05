@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 
 interface PvConfiguratorProps {
   currentPvKw: number
   onApply: (pvKw: number) => void
 }
 
-export function PvConfigurator({ currentPvKw, onApply }: PvConfiguratorProps) {
+export const PvConfigurator = React.memo(function ({ currentPvKw, onApply }: PvConfiguratorProps) {
   const [pvKw, setPvKw] = useState(currentPvKw)
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,8 +65,8 @@ export function PvConfigurator({ currentPvKw, onApply }: PvConfiguratorProps) {
           onClick={handleApply}
           disabled={!hasChanges}
           className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${hasChanges
-              ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
         >
           Apply Changes
@@ -80,4 +80,4 @@ export function PvConfigurator({ currentPvKw, onApply }: PvConfiguratorProps) {
       </div>
     </div>
   )
-}
+})
