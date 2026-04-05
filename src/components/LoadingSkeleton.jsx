@@ -1,20 +1,16 @@
-interface LoadingSkeletonProps {
-  className?: string
-  style?: React.CSSProperties
-}
+const SKELETON_BAR_HEIGHTS = [
+  55, 72, 40, 80, 65, 30, 50, 75, 45, 60,
+  35, 70, 55, 42, 68, 78, 33, 58, 47, 63,
+  38, 72, 50, 44
+]
 
-export function LoadingSkeleton({ className = '', style }: LoadingSkeletonProps) {
+export function LoadingSkeleton({ className = '', style }) {
   return (
     <div className={`animate-pulse bg-gray-200 rounded ${className}`} style={style}>
       <div className="h-full w-full bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] animate-shimmer rounded"></div>
     </div>
   )
 }
-
-// Stable heights — no Math.random() in render to avoid flicker on re-renders
-const SKELETON_BAR_HEIGHTS = [55, 72, 40, 80, 65, 30, 50, 75, 45, 60,
-                               35, 70, 55, 42, 68, 78, 33, 58, 47, 63,
-                               38, 72, 50, 44]
 
 export function ChartSkeleton() {
   return (
@@ -25,11 +21,7 @@ export function ChartSkeleton() {
       </div>
       <div className="h-80 flex items-end justify-between space-x-1">
         {SKELETON_BAR_HEIGHTS.map((height, i) => (
-          <LoadingSkeleton
-            key={i}
-            className="w-full"
-            style={{ height: `${height}%` }}
-          />
+          <LoadingSkeleton key={i} className="w-full" style={{ height: `${height}%` }} />
         ))}
       </div>
     </div>

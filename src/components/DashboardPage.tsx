@@ -210,11 +210,9 @@ export function DashboardPage() {
           </div>
 
           <div className="lg:col-span-1 space-y-4">
+
             <ErrorBoundary>
-              <PvConfigurator
-                currentPvKw={currentPvKw}
-                onApply={handlePvConfigApply}
-              />
+              <PvConfigurator currentPvKw={currentPvKw} onApply={handlePvConfigApply} />
             </ErrorBoundary>
 
             <SaveScenarioCard
