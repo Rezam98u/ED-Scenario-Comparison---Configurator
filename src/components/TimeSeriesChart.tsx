@@ -76,6 +76,7 @@ const formatXAxisTick = (tickItem: string) => {
   })
 }
 
+// we used React.memo to avoid unnecessary rerender through ParentClass (DashboardPage)
 export const TimeSeriesChart = React.memo(({ data }: TimeSeriesChartProps) => {
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6">
