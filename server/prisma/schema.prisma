@@ -10,9 +10,9 @@ datasource db {
 }
 
 model EnergyDataset {
-  id          String   @id @default(cuid())
-  /// Human label for admin / debugging
-  label       String   @default("default")
+  id String   @id @default(id())
+  /// label for admin / debugging
+  label String   @default("default")
   /// Inclusive range this dataset applies to (used for simple overlap matching)
   rangeStart  DateTime @db.Date
   rangeEnd    DateTime @db.Date

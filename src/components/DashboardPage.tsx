@@ -13,6 +13,7 @@ import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis, SavedScenario }
 
 // ─── Small local components ──────────────────────────────────────────────────
 
+// avoid repeating the same header JSX in 3 places
 function PageHeader({ subtitle }: { subtitle: string }) {
   return (
     <div className="mb-8">
@@ -111,8 +112,10 @@ export function DashboardPage() {
         kpis: currentKpis!,
         savedAt: new Date().toISOString(),
       }
-      queryClient.setQueryData<SavedScenario[]>(['saved-scenarios'], (old = []) => [optimistic, ...old])
-
+      queryClient.setQueryData<SavedScenario[]>(
+        ['saved-scenarios'],
+        (old = []) => [optimistic, ...old]
+      )
       return { previous }
     },
 

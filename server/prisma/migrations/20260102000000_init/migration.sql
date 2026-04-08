@@ -10,5 +10,5 @@ CREATE TABLE "EnergyDataset" (
     "kpis" JSONB NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "EnergyDataset_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EnergyDataset_key" PRIMARY KEY ("id")
 );
