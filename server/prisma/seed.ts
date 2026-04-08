@@ -12,9 +12,9 @@ async function main() {
   const raw = readFileSync(jsonPath, 'utf-8')
   const payload = JSON.parse(raw) as {
     timestamps: string[]
-    baseline: unknown
-    scenario: unknown
-    kpis: unknown
+    baseline: object
+    scenario: object
+    kpis: object
   }
 
   await prisma.energyDataset.deleteMany({})
