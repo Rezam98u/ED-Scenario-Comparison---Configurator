@@ -67,7 +67,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   return null
 }
 
-const formatXAxisTick = (tickItem: string) => {
+export const formatXAxisTick = (tickItem: string) => {
   const date = new Date(tickItem)
   return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
