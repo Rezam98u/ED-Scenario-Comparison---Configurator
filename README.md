@@ -50,6 +50,27 @@ A full-stack web application for visualizing energy consumption and PV (photovol
     └── utils/calculateScenario.ts
 ```
 
+## Seeding the Database
+
+The seed script (`server/prisma/seed.ts`) populates the `EnergyDataset` table with one week of mock hourly data (Jan 1–7, 2025) sourced from `mock-data/energy-2025-01-01-2025-01-07.json`.
+
+Run it once after applying migrations:
+
+```bash
+cd server
+npm run db:migrate   # apply schema migrations
+npm run db:seed      # load mock data into the database
+```
+
+**What it does:**
+1. Reads the mock JSON file containing `timestamps`, `baseline`, `scenario`, and `kpis` arrays.
+2. Clears any existing rows in `EnergyDataset` (safe to re-run).
+3. Inserts a single `demo` dataset row that the `GET /api/energy` endpoint serves to the frontend.
+
+> Without seeding, the `GET /api/energy` endpoint returns a `404` and the dashboard will show no data.
+
+---
+
 ## API Reference
 
 All endpoints are prefixed with `/api`.
