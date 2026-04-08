@@ -15,15 +15,6 @@ energyRouter.get('/energy/scenarios', (_req, res) => { res.json(savedScenarios) 
 energyRouter.post('/energy/scenarios', (req, res) => {
 
   // req.body is untyped network input, so fields are optional until validated below
-  // Details:
-  // They're marked optional intentionally and this is a defensive pattern for handling untrusted HTTP request bodies.
-  // req.body comes from the network. TypeScript has no way to know at compile time what a client actually sends.
-  // The client could send:
-  // {} — completely empty body
-  // { pvKw: "hello" } — wrong type
-  // { pvKw: 50 } — missing kpis
-  // null — nothing at all
-
   const { pvKw, kpis } = req.body as { pvKw?: unknown; kpis?: unknown }
 
   if (typeof pvKw !== 'number' || typeof kpis !== 'object' || kpis === null) {

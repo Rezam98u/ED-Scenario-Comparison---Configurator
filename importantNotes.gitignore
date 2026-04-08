@@ -23,6 +23,15 @@
 
 - If stricter validation is needed in the future, use Zod schemas on the POST route.
 
+ // Details:
+  // They're marked optional intentionally and this is a defensive pattern for handling untrusted HTTP request bodies.
+  // req.body comes from the network. TypeScript has no way to know at compile time what a client actually sends.
+  // The client could send:
+  // {} — completely empty body
+  // { pvKw: "hello" } — wrong type
+  // { pvKw: 50 } — missing kpis
+  // null — nothing at all
+
 ---
 
 ## Server tsconfig rootDir change
