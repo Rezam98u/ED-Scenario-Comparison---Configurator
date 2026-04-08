@@ -50,6 +50,19 @@ A full-stack web application for visualizing energy consumption and PV (photovol
     └── utils/calculateScenario.ts
 ```
 
+## Backend Architecture
+
+The backend follows a clear **separation of concerns** between two files:
+
+| File | Responsibility |
+| ---- | -------------- |
+| `server/src/index.ts` | **Infrastructure** — creates the Express app, configures middleware (CORS, JSON parsing), sets the port, mounts routers, and starts the server |
+| `server/src/routes/energy.ts` | **Application logic** — defines all route handlers, validates request data, reads from / writes to the database |
+
+This separation means `index.ts` never contains business logic, and `energy.ts` never concerns itself with how the server is started or configured. Adding a new feature only requires creating a new router file and registering it in `index.ts` with a single `app.use(...)` line.
+
+---
+
 ## Seeding the Database
 
 The seed script (`server/prisma/seed.ts`) populates the `EnergyDataset` table with one week of mock hourly data (Jan 1–7, 2025) sourced from `mock-data/energy-2025-01-01-2025-01-07.json`.
