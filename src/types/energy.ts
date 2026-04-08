@@ -1,5 +1,9 @@
 //  TypeScript interfaces for Energy Dashboard data structures
 
+// API-boundary types live in shared/ and are re-exported here for convenience
+import type { Kpis, SavedScenario } from '../../shared/types'
+export type { Kpis, SavedScenario }
+
 export interface TimeSeries {
   consumption: number[]
   pv_generation: number[]
@@ -7,12 +11,6 @@ export interface TimeSeries {
 
 export interface Baseline extends TimeSeries { }
 export interface Scenario extends TimeSeries { }
-
-export interface Kpis {
-  total_consumption_kwh: number
-  pv_coverage_pct: number
-  co2_savings_ton: number
-}
 
 export interface EnergyApiResponse {
   timestamps: string[]
@@ -32,11 +30,4 @@ export interface ChartDataPoint {
   baseline_pv: number
   scenario_consumption: number
   scenario_pv: number
-}
-
-export interface SavedScenario {
-  id: string
-  pvKw: number
-  kpis: Kpis
-  savedAt: string
 }
