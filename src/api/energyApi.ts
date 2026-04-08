@@ -1,3 +1,6 @@
+
+// API contract and initial Api endpoint
+
 import type { EnergyApiResponse, Kpis, SavedScenario } from '../types/energy'
 
 const BASE_URL = window.location.origin

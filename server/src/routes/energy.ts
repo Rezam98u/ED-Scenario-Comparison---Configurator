@@ -1,9 +1,12 @@
+
+// Backend Business Logic
+
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 
 export const energyRouter = Router()
 
-// In-memory store for saved scenarios (resets on server restart — MVP)
+// In-memory store for saved scenarios (resets on server restart)
 interface SavedScenario {
   id: string
   pvKw: number

@@ -1,3 +1,6 @@
+
+// Frontend Business Logic
+
 import type { Baseline, Scenario, Kpis, ScenarioResult } from '../types/energy'
 
 const HOURS_PER_DAY = 4         // Peak sun hours per day
