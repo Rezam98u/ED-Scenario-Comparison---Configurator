@@ -1,3 +1,4 @@
+import React from 'react'
 import type { Kpis } from '../types/energy'
 
 interface KpiCardsProps {
@@ -30,7 +31,7 @@ function KpiCard({ title, value, unit, change }: KpiCardProps) {
   )
 }
 
-export function KpiCards({ kpis }: KpiCardsProps) {
+export const KpiCards = React.memo(({ kpis }: KpiCardsProps) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <KpiCard
@@ -50,4 +51,4 @@ export function KpiCards({ kpis }: KpiCardsProps) {
       />
     </div>
   )
-}
+})

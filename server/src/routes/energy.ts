@@ -22,6 +22,9 @@ energyRouter.post('/energy/scenarios', (req, res) => {
     return
   }
 
+  // Type Assertions with as
+  // Kpis uses as because we know it's a non-null object and it was validated from frontend,
+  // so TS doesn't need to check it again at runtime 
   const scenario: SavedScenario = {
     id: crypto.randomUUID(),
     pvKw,

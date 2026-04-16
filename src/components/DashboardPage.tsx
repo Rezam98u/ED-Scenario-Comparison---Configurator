@@ -99,6 +99,8 @@ export function DashboardPage() {
     queryFn: () => energyApi.getSavedScenarios(),
   })
 
+  // as we checked currentKpis and Save button is disabled when kpis is null (line 41)
+  // so we can use ! (Assertion) to tell TS that it's not null (skip)
   const saveScenarioMutation = useMutation({
     mutationFn: () => energyApi.saveScenario(currentPvKw, currentKpis!),
 

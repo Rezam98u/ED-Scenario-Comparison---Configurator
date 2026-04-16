@@ -1,3 +1,4 @@
+// use dotenv library to load environment variable (secrets) from .env file (proper configuration management)
 import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
