@@ -5,14 +5,14 @@ interface KpiCardsProps {
   kpis: Kpis
 }
 
-interface KpiCardProps {
-  title: string
-  value: string | number
-  unit: string
-  change?: number
-}
+// we use Conditional type to enforces that percentage/tonne units must have number values
+// and formatted units (like kWh) must have string values
+type KpiCardProps<U extends string = string> = U extends '%' | 't'
+  ? { title: string; value: number; unit: U; change?: number }
+  : { title: string; value: string; unit: U; change?: number }
 
-function KpiCard({ title, value, unit, change }: KpiCardProps) {
+
+function KpiCard<U extends string>({ title, value, unit, change }: KpiCardProps<U>) {
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6">
       <h3 className="text-sm font-medium text-gray-600 mb-2">{title}</h3>

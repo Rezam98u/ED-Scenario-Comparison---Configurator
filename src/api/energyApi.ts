@@ -5,6 +5,13 @@ import type { EnergyApiResponse, Kpis, SavedScenario } from '../types/energy'
 
 const BASE_URL = window.location.origin
 
+// Generic helper function
+// Generic JSON parser that auto-infers the response type from the caller's return type annotation
+// The function signature tells TypeScript what type to expect, so we don't repeat it in assertions
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  return response.json() as Promise<T>
+}
+
 export const energyApi = {
   async getEnergyData(): Promise<EnergyApiResponse> {
     const response = await fetch(`${BASE_URL}/api/energy`)
@@ -21,13 +28,16 @@ export const energyApi = {
       throw new Error(message || `Failed to fetch energy data: ${response.status}`)
     }
 
-    return response.json() as Promise<EnergyApiResponse>
+    // Type automatically inferred from the function's return type signature
+    return parseJsonResponse(response)
   },
 
   async getSavedScenarios(): Promise<SavedScenario[]> {
     const response = await fetch(`${BASE_URL}/api/energy/scenarios`)
     if (!response.ok) { throw new Error(`Failed to fetch saved scenarios: ${response.status}`) }
-    return response.json() as Promise<SavedScenario[]>
+
+    // Type automatically inferred from the function's return type signature
+    return parseJsonResponse(response)
   },
 
   async saveScenario(pvKw: number, kpis: Kpis): Promise<SavedScenario> {
@@ -41,6 +51,7 @@ export const energyApi = {
       throw new Error(`Failed to save scenario: ${response.status}`)
     }
 
-    return response.json() as Promise<SavedScenario>
+    // Type automatically inferred from the function's return type signature
+    return parseJsonResponse(response)
   },
 }

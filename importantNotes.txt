@@ -1,0 +1,113 @@
+# Important Notes for portfolio — Energy Dashboard
+
+---
+
+## Advanced TypeScript Patterns (Portfolio Learning)
+
+### 1. Conditional Types for UI Props (KpiCard)
+- File: `src/components/KpiCards.tsx`
+- Pattern: Type relationship between `unit` and `value` using conditional types.
+- `unit` extends '%' | 't' → `value` must be `number`
+- Other units (like 'kWh') → `value` must be `string` (pre-formatted)
+- Benefit: **Compile-time validation** that value type matches unit semantics. Catches mismatches before runtime.
+- Example:
+  ```typescript
+  type KpiCardProps<U extends string = string> = U extends '%' | 't'
+    ? { title: string; value: number; unit: U; change?: number }
+    : { title: string; value: string; unit: U; change?: number }
+  ```
+
+### 2. Generic Type Inference in API Layer (energyApi.ts)
+- File: `src/api/energyApi.ts`
+- Pattern: Generic helper function `parseJsonResponse<T>()` eliminates repetition.
+- Extracts response type automatically from the function's return type signature.
+- Before: `return response.json() as Promise<EnergyApiResponse>` (repeats type twice)
+- After: `return parseJsonResponse(response)` (type inferred from context)
+- Benefit: **DRY principle** — if function signature changes, assertion automatically updates. No maintenance bug.
+- How it works: TypeScript infers `T = EnergyApiResponse` from `Promise<EnergyApiResponse>` in the return type.
+
+### 3. Runtime Validation Pattern (Backend Best Practice)
+- File: `server/src/routes/energy.ts`
+- Current: Uses `typeof` guards for shallow validation (`typeof pvKw !== 'number'`)
+- Future improvement: Add Zod schema validation for deep object validation.
+- Why: `typeof` only catches top-level type mismatches. Zod validates entire object structure and field shapes.
+- Note: Conditional Types solve compile-time problems; Zod solves runtime (network data) problems. Different tools, complementary use.
+
+### 4. Type Assertions (`as` and `!`)
+- **Type assertion (`as`)**: Override TypeScript's inference when you have information the compiler doesn't.
+  - File: `server/src/routes/energy.ts:31` — `kpis as Kpis` after validating it's a non-null object.
+  - Safe here because we've proven `kpis` is object-shaped via `typeof` checks.
+  - Use only after validation; it's an escape hatch, not a solution.
+  
+- **Non-null assertion (`!`)**: Guarantee a value is not null/undefined.
+  - File: `src/components/DashboardPage.tsx:103` — `currentKpis!` in mutation function.
+  - Safe because the Save button is disabled when `kpis` is null, so mutation can only fire when value exists.
+  - Proves to TypeScript that you understand the control flow, even if it can't infer it.
+
+- **Golden Rule**: Use assertions sparingly and only after you've proven safety yourself. If you need assertions everywhere, reconsider your type design.
+
+---
+
+## Shared Types (API boundary)
+
+- `Kpis` and `SavedScenario` are the only types that cross the API boundary (frontend ↔ backend).
+- They live in `shared/types.ts` (workspace root) — the single source of truth.
+- `src/types/energy.ts` imports and re-exports them for frontend use.
+- `server/src/routes/energy.ts` imports them directly from `../../../shared/types.js` (.js extension required for NodeNext module resolution).
+- All other types (UI-only, Prisma/DB) stay in their respective layers and are NOT shared.
+
+---
+
+## Backend Typing: req.body is always unknown
+
+- `req.body` in Express has no compile-time shape guarantee — it's open to the world (curl, Postman, scripts).
+- Always type destructured fields from `req.body` as `unknown` (not the expected type), then validate with `typeof` guards before trusting the data.
+- The browser `<input type="number">` only protects the happy-path UI user, NOT the server.
+- Correct pattern:
+   const { pvKw, kpis } = req.body as { pvKw?: unknown; kpis?: unknown }
+   // then validate with typeof checks before use
+
+- **Important**: `typeof` checks are shallow — they only verify top-level types. They do NOT validate object structure.
+  - `typeof kpis !== 'object'` proves `kpis` is an object, but NOT that it has `total_consumption_kwh`, `pv_coverage_pct`, `co2_savings_ton` fields.
+  - For deeper validation, use a runtime schema validator like Zod (see "Advanced TypeScript Patterns" above).
+
+ // Details:
+  // They're marked optional intentionally and this is a defensive pattern for handling untrusted HTTP request bodies.
+  // req.body comes from the network. TypeScript has no way to know at compile time what a client actually sends.
+  // The client could send:
+  // {} — completely empty body
+  // { pvKw: "hello" } — wrong type
+  // { pvKw: 50 } — missing kpis
+  // null — nothing at all
+
+---
+
+## Server tsconfig rootDir change
+
+- `server/tsconfig.json` uses `rootDir: ".."` (workspace root) instead of `"src"` to allow importing from `../shared/`.
+- This changes the compiled output path: `server/src/index.ts` → `server/dist/server/src/index.js`.
+- The `start` script in `server/package.json` is updated accordingly: `node dist/server/src/index.js`.
+
+---
+
+## Backend Architecture: Separation of Concerns
+
+- `server/src/index.ts` — Infrastructure only: Express setup, CORS, middleware, port, router mounting.
+- `server/src/routes/energy.ts` — Application logic only: route handlers, validation, DB reads/writes.
+- New features = new router file + one `app.use(...)` line in index.ts. No other changes to index.ts needed.
+
+---
+
+## In-memory Scenario Storage
+
+- Saved scenarios are stored in a plain array (`savedScenarios[]`) in `server/src/routes/energy.ts`.
+- They reset on every server restart — this is intentional for the demo but noted as a natural next step to persist to the database.
+
+---
+
+## Seeding the Database
+
+- Run `npm run db:migrate` then `npm run db:seed` once after setting up the database.
+- The seed script wipes existing `EnergyDataset` rows before inserting — safe to re-run.
+- Without seeding, `GET /api/energy` returns 404 and the dashboard shows no data.
+- Seed data source: `mock-data/energy-2025-01-01-2025-01-07.json` (7-day hourly dataset).
