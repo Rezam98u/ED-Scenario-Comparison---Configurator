@@ -6,6 +6,7 @@ import { PvConfigurator } from './PvConfigurator'
 import { ChartSkeleton, KpiCardSkeleton } from './LoadingSkeleton'
 import { ErrorState } from './ErrorState'
 import { ErrorBoundary } from './ErrorBoundary'
+import { ChatPanel } from './ChatPanel'
 import { energyApi } from '../api/energyApi'
 import { calculateScenario } from '../utils/calculateScenario'
 import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis, SavedScenario } from '../types/energy'
@@ -230,6 +231,10 @@ export function DashboardPage() {
             />
 
             <SavedScenariosList scenarios={savedScenarios} />
+
+            <ErrorBoundary>
+              <ChatPanel />
+            </ErrorBoundary>
           </div>
         </div>
       </div>

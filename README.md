@@ -13,6 +13,7 @@ A full-stack web application for visualizing energy consumption and PV (photovol
 - **PV Configuration** — slider + numeric input (0–100 kW) to adjust PV capacity; changes are applied on demand
 - **Save scenarios** — persist named scenarios via the API (in-memory, resets on restart); optimistic UI updates
 - **Skeleton loading states & error boundaries** — graceful handling of slow or failed API calls
+- **AI Assistant (Groq + Llama 3.3 70B)** — tool-calling chat agent that can query the dataset, run what-if scenarios, and search for the optimal PV size
 
 ---
 
@@ -26,6 +27,7 @@ A full-stack web application for visualizing energy consumption and PV (photovol
 | Backend       | Node.js, Express 4, TypeScript, tsx      |
 | ORM           | Prisma 6                                 |
 | Database      | PostgreSQL 16 (via Docker)               |
+| AI agent      | Groq SDK, Llama 3.3 70B, zod             |
 
 ---
 
@@ -94,6 +96,7 @@ All endpoints are prefixed with `/api`.
 | `GET`  | `/api/energy`           | Fetch the full energy dataset (timestamps, baseline, scenario, KPIs) |
 | `GET`  | `/api/energy/scenarios` | List all saved scenarios                                             |
 | `POST` | `/api/energy/scenarios` | Save a new scenario (`{ pvKw: number, kpis: object }`)               |
+| `POST` | `/api/chat`             | Run the AI agent on a conversation (`{ messages: ChatMessage[] }`)   |
 
 ---
 
@@ -136,3 +139,51 @@ The frontend calculates scenario values in `src/utils/calculateScenario.ts` usin
 - Saved scenarios are stored **in memory** on the server and reset on restart. Persisting them to the database is a natural next step.
 - The seed script wipes existing `EnergyDataset` rows before inserting, so re-running it is safe.
 - The Vite dev proxy is not configured — the frontend reads `window.location.origin` for API calls, so both servers must run on their default ports.
+
+---
+
+## AI Agent (Chat + Optimizer)
+
+The dashboard ships with a Groq-powered chat agent that can answer natural-language questions, run what-if scenarios, and find the optimal PV capacity — all by calling server-side tools that wrap the same business logic the UI uses.
+
+### Setup
+
+1. Create a free API key at [console.groq.com](https://console.groq.com).
+2. Add it to `server/.env`:
+
+   ```env
+   GROQ_API_KEY=gsk_...
+   ```
+
+3. Restart the API server. The assistant panel on the dashboard will become usable.
+
+### Architecture
+
+```
+User → ChatPanel.tsx → POST /api/chat → runAgent loop → Groq (Llama 3.3 70B)
+                                               ↓ tool_calls
+                                        tools.ts dispatch
+                                               ↓
+                             [Prisma | calculateScenario | optimizer | scenarioStore]
+```
+
+- The **LLM decides which tools to call**; the loop in `server/src/agent/runAgent.ts` executes them and feeds results back until the model produces a final answer (capped at 6 steps).
+- Tool arguments are validated with **zod** before any handler runs.
+- The optimizer itself is a **deterministic grid search** (`server/src/agent/optimizer.ts`), exposed as a tool — keeping expensive reasoning in fast, reliable code while the LLM handles intent and explanation.
+
+### Tools the agent can call
+
+| Tool                | Purpose                                                              |
+| ------------------- | -------------------------------------------------------------------- |
+| `getEnergyData`     | Return the seeded 7-day baseline + KPIs                              |
+| `calculateScenario` | Simulate KPIs for a specific `pvKw`                                  |
+| `optimizeScenario`  | Grid-search best `pvKw` for `co2` / `coverage` / `minConsumption`    |
+| `listScenarios`     | Read the in-memory saved-scenarios store                             |
+| `saveScenario`      | Compute KPIs from the canonical baseline and persist the scenario    |
+
+### Example prompts
+
+- *"What was the average daily PV coverage?"*
+- *"What would the KPIs look like if PV were 40 kW?"*
+- *"Find the best PV size to maximize CO2 savings under 50 kW."*
+- *"Save a 25 kW scenario."*

@@ -3,14 +3,12 @@
 
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
-import type { Kpis, SavedScenario } from '../../../shared/types.js'
+import { listScenarios, addScenario } from '../agent/scenarioStore.js'
+import type { Kpis } from '../../../shared/types.js'
 
 export const energyRouter = Router()
 
-// In-memory store for saved scenarios (resets on server restart)
-const savedScenarios: SavedScenario[] = []
-
-energyRouter.get('/energy/scenarios', (_req, res) => { res.json(savedScenarios) })
+energyRouter.get('/energy/scenarios', (_req, res) => { res.json(listScenarios()) })
 
 energyRouter.post('/energy/scenarios', (req, res) => {
 
@@ -22,17 +20,8 @@ energyRouter.post('/energy/scenarios', (req, res) => {
     return
   }
 
-  // Type Assertions with as
-  // Kpis uses as because we know it's a non-null object and it was validated from frontend,
-  // so TS doesn't need to check it again at runtime 
-  const scenario: SavedScenario = {
-    id: crypto.randomUUID(),
-    pvKw,
-    kpis: kpis as Kpis,
-    savedAt: new Date().toISOString(),
-  }
-
-  savedScenarios.unshift(scenario)
+  // kpis was validated from the frontend; cast is safe here
+  const scenario = addScenario(pvKw, kpis as Kpis)
   res.status(201).json(scenario)
 })
 

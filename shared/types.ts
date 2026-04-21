@@ -12,3 +12,29 @@ export interface SavedScenario {
   kpis: Kpis
   savedAt: string
 }
+
+// ─── AI Agent types ──────────────────────────────────────────────────────────
+
+export type ChatRole = 'system' | 'user' | 'assistant' | 'tool'
+
+export interface ChatToolCall {
+  id: string
+  name: string
+  arguments: string
+}
+
+export interface ChatMessage {
+  role: ChatRole
+  content: string | null
+  tool_calls?: ChatToolCall[]
+  tool_call_id?: string
+  name?: string
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[]
+}
+
+export interface ChatResponse {
+  messages: ChatMessage[]
+}
