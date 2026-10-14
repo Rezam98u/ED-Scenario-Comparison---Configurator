@@ -35,3 +35,8 @@ coverage/
 
 # Build artifacts
 build/
+
+# Python (server-py)
+.venv/
+__pycache__/
+.pytest_cache/

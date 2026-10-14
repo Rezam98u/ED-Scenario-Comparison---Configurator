@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        // FastAPI backend (server-py/, port 8000). Use http://localhost:4000 for the Express backend (server/).
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },

@@ -97,6 +97,36 @@ All endpoints are prefixed with `/api`.
 
 ---
 
+## Python backend (FastAPI)
+
+`server-py/` is a 1:1 FastAPI port of the Express backend: same endpoints, same JSON responses and the same `{ "error": "..." }` error shape. It reads the same PostgreSQL database (use the Express/Prisma steps above to migrate and seed it). The Vite dev proxy (`vite.config.ts`) points to it on port **8000**; switch the target back to `http://localhost:4000` to use Express.
+
+**Mac / Linux**
+
+```bash
+cd server-py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+**Windows (PowerShell)**
+
+```powershell
+cd server-py
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+- Database URL: env variable `DATABASE_URL_PY` (default `postgresql://postgres:postgres@localhost:5432/energy_dashboard`, without Prisma's `?schema=public`).
+- Run tests: `pytest` (inside `server-py/` with the venv active).
+- Interactive API docs are generated automatically at http://localhost:8000/docs.
+
+---
+
 ## Scenario Calculation
 
 The frontend calculates scenario values in `src/utils/calculateScenario.ts` using these assumptions:
