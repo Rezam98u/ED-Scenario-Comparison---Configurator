@@ -10,13 +10,13 @@ A full-stack web application for visualizing energy consumption and PV (photovol
 
 ## Branches
 
-The project has one main line and two feature branches. Both feature branches start from `main` and are independent of each other.
+The project has one main line and two feature branches. Both feature branches start from `main` and are independent of each other. Each feature is documented in the README of its own branch.
 
-| Branch | What it adds |
-| ------ | ------------ |
-| `main` | The dashboard: React frontend + Express/Prisma backend + PostgreSQL |
-| `migration/express-to-fastapi` (this branch) | A **Python FastAPI backend** (`server-py/`), a 1:1 port of the Express API. See [Python Backend (FastAPI)](#python-backend-fastapi). |
-| `feature/ai-agent-integration` | An **AI assistant** (chat panel + PV optimizer) powered by Groq / Llama 3.3 70B, running in the Express backend. Documented in that branch's README. |
+| Branch | Feature | Documentation |
+| ------ | ------- | ------------- |
+| `main` | The dashboard (React + Express/Prisma + PostgreSQL) | [README on `main`](https://github.com/Rezam98u/ED-Scenario-Comparison---Configurator/blob/main/README.md) |
+| `migration/express-to-fastapi` (this branch) | Python FastAPI backend | [Python Backend (FastAPI)](#python-backend-fastapi) |
+| `feature/ai-agent-integration` | AI assistant (chat + PV optimizer) | [AI Agent on `feature/ai-agent-integration`](https://github.com/Rezam98u/ED-Scenario-Comparison---Configurator/blob/feature/ai-agent-integration/README.md#ai-agent-chat--optimizer) |
 
 Switch branches with `git switch <branch>`, then reinstall dependencies if `package.json` changed (`npm install` in the root and in `server/`).
 
