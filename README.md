@@ -6,6 +6,20 @@ A full-stack web application for visualizing energy consumption and PV (photovol
 
 ---
 
+## Branches
+
+The project has one main line and two feature branches. Both feature branches start from `main` and are independent of each other. Each feature is documented in the README of its own branch.
+
+| Branch | Feature | Documentation |
+| ------ | ------- | ------------- |
+| `main` | The dashboard (React + Express/Prisma + PostgreSQL) | [README on `main`](https://github.com/Rezam98u/ED-Scenario-Comparison---Configurator/blob/main/README.md) |
+| `migration/express-to-fastapi` | Python FastAPI backend | [Python Backend (FastAPI) on `migration/express-to-fastapi`](https://github.com/Rezam98u/ED-Scenario-Comparison---Configurator/blob/migration/express-to-fastapi/README.md#python-backend-fastapi) |
+| `feature/ai-agent-integration` (this branch) | AI assistant (chat + PV optimizer) | [AI Agent (Chat + Optimizer)](#ai-agent-chat--optimizer) |
+
+Switch branches with `git switch <branch>`, then reinstall dependencies if `package.json` changed (`npm install` in the root and in `server/`).
+
+---
+
 ## Features
 
 - **Time-series chart** — hourly baseline vs. scenario comparison for consumption and PV generation over a 7-day window, with a brush/zoom control
