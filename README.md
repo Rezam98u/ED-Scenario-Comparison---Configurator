@@ -131,6 +131,40 @@ The frontend calculates scenario values in `src/utils/calculateScenario.ts` usin
 
 ---
 
+## Python backend (FastAPI)
+
+`server-py/` is a 1:1 port of the Express API to Python (FastAPI + psycopg): same endpoints, same JSON responses. The Vite dev server proxies `/api` to it on port 8000 (see `vite.config.ts`; change the target back to `http://localhost:4000` to use Express).
+
+**Prerequisites:** Python 3.9+, and PostgreSQL running and seeded (`docker compose up -d db`, then the migrate and seed steps above).
+
+**Mac / Linux**
+
+```bash
+cd server-py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload        # http://localhost:8000
+pytest                           # run the tests
+```
+
+**Windows (PowerShell)**
+
+```powershell
+cd server-py
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --reload        # http://localhost:8000
+pytest                           # run the tests
+```
+
+FastAPI generates interactive API docs at <http://localhost:8000/docs> (Swagger UI) and <http://localhost:8000/redoc>.
+
+The database URL is read from `DATABASE_URL_PY` (default `postgresql://postgres:postgres@localhost:5432/energy_dashboard`). It is separate from Prisma's `DATABASE_URL` because psycopg does not accept the `?schema=public` suffix.
+
+---
+
 ## Notes
 
 - Saved scenarios are stored **in memory** on the server and reset on restart. Persisting them to the database is a natural next step.
