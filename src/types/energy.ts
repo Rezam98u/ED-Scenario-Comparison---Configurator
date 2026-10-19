@@ -31,3 +31,25 @@ export interface ChartDataPoint {
   scenario_consumption: number
   scenario_pv: number
 }
+
+// GET /api/energy/analysis (server-py/analysis.py). All days and hours are UTC.
+export interface DailyStats {
+  date: string // YYYY-MM-DD
+  consumption_kwh: number
+  pv_kwh: number
+  self_consumed_kwh: number
+  autarky_pct: number
+}
+
+export interface HourlyProfilePoint {
+  hour: number // 0-23
+  consumption_kwh: number
+  pv_kwh: number
+}
+
+export interface EnergyAnalysis {
+  daily: DailyStats[]
+  hourlyProfile: HourlyProfilePoint[]
+  peakConsumptionHour: number | null // null only when the dataset has no hours
+  peakPvHour: number | null
+}

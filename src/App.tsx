@@ -18,7 +18,7 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <ErrorBoundary context="App">
+    <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <DashboardPage />
       </QueryClientProvider>

@@ -4,10 +4,11 @@ Run from server-py/:  uvicorn main:app --reload   (http://localhost:8000, docs a
 """
 
 import logging
+import math
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Union
+from typing import Optional, Union
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Request
@@ -17,6 +18,9 @@ from fastapi.responses import JSONResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel, StrictFloat, StrictInt
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from analysis import analyze_baseline
+from calculations import calculate_scenario
 
 # Prisma's DATABASE_URL ends with "?schema=public", which psycopg does not accept,
 # so the Python backend reads its own variable.
@@ -71,6 +75,47 @@ class NewScenario(BaseModel):
     kpis: Kpis
 
 
+class TimeSeries(BaseModel):
+    consumption: list[JsonNumber]
+    pv_generation: list[JsonNumber]
+
+
+class CalculateRequest(BaseModel):
+    """Request body of POST /api/energy/calculate."""
+
+    pvKw: JsonNumber
+
+
+class ScenarioResult(BaseModel):
+    """Response of POST /api/energy/calculate (ScenarioResult in src/types/energy.ts)."""
+
+    scenario: TimeSeries
+    kpis: Kpis
+
+
+class DailyStats(BaseModel):
+    date: str  # YYYY-MM-DD (UTC day)
+    consumption_kwh: float
+    pv_kwh: float
+    self_consumed_kwh: float
+    autarky_pct: float
+
+
+class HourlyProfilePoint(BaseModel):
+    hour: int  # 0-23 (UTC)
+    consumption_kwh: float
+    pv_kwh: float
+
+
+class AnalysisResponse(BaseModel):
+    """Response of GET /api/energy/analysis."""
+
+    daily: list[DailyStats]
+    hourlyProfile: list[HourlyProfilePoint]
+    peakConsumptionHour: Optional[int]  # None only when the dataset has no hours
+    peakPvHour: Optional[int]
+
+
 # --- Error contract ----------------------------------------------------------
 # src/api/energyApi.ts reads body.error, so every error must be { "error": "..." }
 # instead of FastAPI's default { "detail": ... }.
@@ -84,12 +129,19 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     )
 
 
+# One message per endpoint. Paths not listed keep the message Express uses for
+# POST /api/energy/scenarios.
+DEFAULT_VALIDATION_ERROR = "pvKw (number) and kpis (object) are required"
+VALIDATION_ERRORS = {
+    "/api/energy/calculate": "pvKw (number) is required",
+}
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     # FastAPI would answer 422 with a list of details; Express answers 400 with one message.
-    return JSONResponse(
-        status_code=400, content={"error": "pvKw (number) and kpis (object) are required"}
-    )
+    message = VALIDATION_ERRORS.get(request.url.path, DEFAULT_VALIDATION_ERROR)
+    return JSONResponse(status_code=400, content={"error": message})
 
 
 # --- Routes ------------------------------------------------------------------
@@ -123,10 +175,11 @@ def save_scenario(body: NewScenario):
     return scenario
 
 
-@app.get("/api/energy")
-def get_energy():
-    # A plain `def` (not `async def`) runs in a worker thread, so the blocking
-    # psycopg calls do not freeze the server.
+def load_dataset() -> dict:
+    """Read the oldest EnergyDataset row. Raises HTTPException 500 (database) or 404 (empty).
+
+    Kept separate from the routes so tests can replace it without a database.
+    """
     try:
         # connect_timeout=5 is the same as Prisma's default connection timeout
         with psycopg.connect(DATABASE_URL, connect_timeout=5, row_factory=dict_row) as conn:
@@ -153,4 +206,36 @@ def get_energy():
         "baseline": row["baseline"],
         "scenario": row["scenario"],
         "kpis": row["kpis"],
+    }
+
+
+@app.get("/api/energy")
+def get_energy():
+    # A plain `def` (not `async def`) runs in a worker thread, so the blocking
+    # psycopg calls do not freeze the server.
+    return load_dataset()
+
+
+@app.post("/api/energy/calculate", response_model=ScenarioResult)
+def calculate(body: CalculateRequest):
+    # Python's JSON parser accepts NaN and Infinity (JSON itself does not), so reject them
+    if not math.isfinite(body.pvKw):
+        raise RequestValidationError([])
+    # Checked before loading, so a negative value is a 400 even if the database is down
+    if body.pvKw < 0:
+        raise HTTPException(status_code=400, detail="PV capacity cannot be negative")
+
+    dataset = load_dataset()
+    return calculate_scenario(dataset["baseline"], body.pvKw)
+
+
+@app.get("/api/energy/analysis", response_model=AnalysisResponse)
+def get_analysis():
+    result = analyze_baseline(load_dataset())
+    # analysis.py uses Python names; the API uses camelCase like the rest of the JSON
+    return {
+        "daily": result["daily"],
+        "hourlyProfile": result["hourly_profile"],
+        "peakConsumptionHour": result["peak_consumption_hour"],
+        "peakPvHour": result["peak_pv_hour"],
     }

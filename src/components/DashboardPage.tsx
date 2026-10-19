@@ -1,14 +1,14 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useMemo, useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { TimeSeriesChart } from './TimeSeriesChart'
 import { KpiCards } from './KpiCards'
 import { PvConfigurator } from './PvConfigurator'
 import { ChartSkeleton, KpiCardSkeleton } from './LoadingSkeleton'
 import { ErrorState } from './ErrorState'
 import { ErrorBoundary } from './ErrorBoundary'
+import { AnalysisSection } from './AnalysisSection'
 import { energyApi } from '../api/energyApi'
-import { calculateScenario } from '../utils/calculateScenario'
-import type { EnergyApiResponse, ChartDataPoint, Scenario, Kpis, SavedScenario } from '../types/energy'
+import type { EnergyApiResponse, ChartDataPoint, Kpis, SavedScenario, ScenarioResult } from '../types/energy'
 
 
 // ─── Small local components ──────────────────────────────────────────────────
@@ -84,13 +84,27 @@ function SavedScenariosList({ scenarios }: { scenarios: SavedScenario[] }) {
 
 export function DashboardPage() {
   const [currentPvKw, setCurrentPvKw] = useState(10)
-  const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null)
-  const [currentKpis, setCurrentKpis] = useState<Kpis | null>(null)
 
   const { data, isLoading, error, refetch } = useQuery<EnergyApiResponse>({
     queryKey: ['energy-data'],
     queryFn: () => energyApi.getEnergyData(),
   })
+
+  // The scenario is calculated by the backend (POST /api/energy/calculate).
+  // pvKw is part of the query key, so each value is cached: going back to a pvKw
+  // that was already calculated needs no new request.
+  const scenarioQuery = useQuery<ScenarioResult>({
+    queryKey: ['scenario', currentPvKw],
+    queryFn: () => energyApi.calculateScenario(currentPvKw),
+    // While a new pvKw is calculated, keep showing the previous result
+    // instead of the full-page skeleton
+    placeholderData: keepPreviousData,
+  })
+
+  const currentScenario = scenarioQuery.data?.scenario ?? null
+  const currentKpis = scenarioQuery.data?.kpis ?? null
+  // Placeholder KPIs belong to the previous pvKw, so they must not be saved with the new one
+  const savableKpis = scenarioQuery.isPlaceholderData ? null : currentKpis
 
   const queryClient = useQueryClient()
 
@@ -99,10 +113,10 @@ export function DashboardPage() {
     queryFn: () => energyApi.getSavedScenarios(),
   })
 
-  // as we checked currentKpis and Save button is disabled when kpis is null (line 41)
+  // as we checked savableKpis and Save button is disabled when kpis is null (line 41)
   // so we can use ! (Assertion) to tell TS that it's not null (skip)
   const saveScenarioMutation = useMutation({
-    mutationFn: () => energyApi.saveScenario(currentPvKw, currentKpis!),
+    mutationFn: () => energyApi.saveScenario(currentPvKw, savableKpis!),
 
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['saved-scenarios'] })
@@ -111,7 +125,7 @@ export function DashboardPage() {
       const optimistic: SavedScenario = {
         id: `optimistic-${Date.now()}`,
         pvKw: currentPvKw,
-        kpis: currentKpis!,
+        kpis: savableKpis!,
         savedAt: new Date().toISOString(),
       }
       queryClient.setQueryData<SavedScenario[]>(
@@ -131,14 +145,6 @@ export function DashboardPage() {
 
   })
 
-  useEffect(() => {
-    if (data) {
-      const result = calculateScenario(data.baseline, currentPvKw)
-      setCurrentScenario(result.scenario)
-      setCurrentKpis(result.kpis)
-    }
-  }, [data, currentPvKw])
-
   const handlePvConfigApply = useCallback((newPvKw: number) => {
     setCurrentPvKw(newPvKw)
   }, [])
@@ -154,7 +160,7 @@ export function DashboardPage() {
     }))
   }, [data, currentScenario])
 
-  if (isLoading) {
+  if (isLoading || scenarioQuery.isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
@@ -186,12 +192,16 @@ export function DashboardPage() {
     )
   }
 
-  if (error) {
+  const pageError = error ?? scenarioQuery.error
+  if (pageError) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           <PageHeader subtitle="Scenario Comparison & Configurator" />
-          <ErrorState error={error} onRetry={() => refetch()} />
+          <ErrorState
+            error={pageError}
+            onRetry={() => (error ? refetch() : scenarioQuery.refetch())}
+          />
         </div>
       </div>
     )
@@ -222,7 +232,7 @@ export function DashboardPage() {
 
             <SaveScenarioCard
               pvKw={currentPvKw}
-              kpis={currentKpis}
+              kpis={savableKpis}
               isPending={saveScenarioMutation.isPending}
               isError={saveScenarioMutation.isError}
               isSuccess={saveScenarioMutation.isSuccess}
@@ -232,6 +242,10 @@ export function DashboardPage() {
             <SavedScenariosList scenarios={savedScenarios} />
           </div>
         </div>
+
+        <ErrorBoundary>
+          <AnalysisSection />
+        </ErrorBoundary>
       </div>
     </div>
   )

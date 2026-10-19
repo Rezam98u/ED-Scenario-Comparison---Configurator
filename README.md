@@ -73,7 +73,12 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 │       └── index.ts
 ├── server-py/                    # Backend 2: FastAPI + psycopg (port 8000)
 │   ├── main.py                   # App, Pydantic models, error handlers, routes
-│   ├── test_main.py              # pytest tests
+│   ├── calculations.py           # Scenario calculation (port of calculateScenario.ts)
+│   ├── analysis.py               # Data analysis with pandas
+│   ├── test_main.py              # pytest tests (endpoints)
+│   ├── test_calculations.py      # parity tests against the TypeScript version
+│   ├── test_analysis.py          # analysis + GET /api/energy/analysis tests
+│   ├── tests/                    # parity fixture + the script that generates it
 │   └── requirements.txt
 ├── src/
 │   ├── api/energyApi.ts
@@ -143,8 +148,10 @@ Browser ──► Vite :5173 ──/api──► Express :4000   (target: http:/
 
 | Backend | Port | Proxy target |
 | ------- | ---- | ------------ |
-| Express (`server/`) | 4000 | `http://localhost:4000` (current setting) |
-| FastAPI (`server-py/`) | 8000 | `http://localhost:8000` |
+| Express (`server/`) | 4000 | `http://localhost:4000` |
+| FastAPI (`server-py/`) | 8000 | `http://localhost:8000` (current setting) |
+
+> The dashboard calls `POST /api/energy/calculate` and `GET /api/energy/analysis`, which only FastAPI provides (see [Data Processing in Python](#data-processing-in-python)). With the proxy on Express, the dashboard shows an error instead of the scenario.
 
 Restart Vite after changing the target. Both backends read the same database and can run side by side (for example to compare responses), but the page only uses the one the proxy points to. Each backend can always be called directly, e.g. `curl http://localhost:8000/api/energy`.
 
@@ -217,9 +224,31 @@ The database URL is read from `DATABASE_URL_PY` (default `postgresql://postgres:
 
 ---
 
+## Data Processing in Python
+
+Two endpoints exist only in the FastAPI backend. Both read the baseline from the database (same `404`/`500` errors as `GET /api/energy`). The logic lives in pure functions without FastAPI code, so it can be tested on its own.
+
+**`POST /api/energy/calculate`** — body `{ "pvKw": number }`, returns `{ scenario, kpis }` (the `ScenarioResult` type). `server-py/calculations.py` is an exact port of `src/utils/calculateScenario.ts`, including JS `Math.round` rounding (Python's `round()` rounds halves to even). The frontend calls it with TanStack Query, cached per `pvKw`. Negative `pvKw` → `400 PV capacity cannot be negative`; an invalid body → `400 pvKw (number) is required`.
+
+The TypeScript function stays as the reference: `test_calculations.py` checks that Python returns exactly the same numbers for pvKw 0, 5, 10, 33.3 and 100. To regenerate the fixture after changing the TypeScript calculation, run from the repo root:
+
+```bash
+server/node_modules/.bin/tsx server-py/tests/generate_parity_fixture.ts
+```
+
+**`GET /api/energy/analysis`** — pandas analysis of the baseline (`server-py/analysis.py`), shown in the "Analyse" section of the dashboard:
+
+- `daily`: per day `date`, `consumption_kwh`, `pv_kwh`, `self_consumed_kwh` (per hour `min(consumption, pv)`) and `autarky_pct` (self-consumed / consumption × 100)
+- `hourlyProfile`: average `consumption_kwh` and `pv_kwh` per hour of the day (0–23)
+- `peakConsumptionHour`, `peakPvHour`: hour with the highest average
+
+All days and hours are **UTC**, like the timestamps in the data.
+
+---
+
 ## API Reference
 
-Both backends implement the same endpoints.
+Both backends implement these endpoints (FastAPI additionally has the two endpoints above).
 
 | Method | Endpoint                | Description                                                          |
 | ------ | ----------------------- | -------------------------------------------------------------------- |
@@ -233,6 +262,8 @@ Errors are always JSON with an `error` message (the frontend reads `body.error`)
 | Status | When                                      | Message                                                              |
 | ------ | ----------------------------------------- | -------------------------------------------------------------------- |
 | `400`  | Invalid `POST /api/energy/scenarios` body | `pvKw (number) and kpis (object) are required`                       |
+| `400`  | Invalid `POST /api/energy/calculate` body | `pvKw (number) is required`                                          |
+| `400`  | Negative `pvKw` in `/api/energy/calculate`| `PV capacity cannot be negative`                                     |
 | `404`  | `EnergyDataset` table is empty            | `No energy data. Run migrations and seed.`                           |
 | `500`  | Database unreachable or query failed      | `Database error. Check DATABASE_URL and that PostgreSQL is running.` |
 
@@ -240,7 +271,7 @@ Errors are always JSON with an `error` message (the frontend reads `body.error`)
 
 ## Scenario Calculation
 
-The frontend calculates scenario values in `src/utils/calculateScenario.ts` using these assumptions:
+The FastAPI backend calculates scenario values in `server-py/calculations.py` (ported from `src/utils/calculateScenario.ts`, which remains the reference) using these assumptions:
 
 | Constant              | Value      | Description                                     |
 | --------------------- | ---------- | ----------------------------------------------- |
