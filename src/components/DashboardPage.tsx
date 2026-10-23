@@ -7,6 +7,7 @@ import { ChartSkeleton, KpiCardSkeleton } from './LoadingSkeleton'
 import { ErrorState } from './ErrorState'
 import { ErrorBoundary } from './ErrorBoundary'
 import { AnalysisSection } from './AnalysisSection'
+import { ChatPanel } from './ChatPanel'
 import { energyApi } from '../api/energyApi'
 import type { EnergyApiResponse, ChartDataPoint, Kpis, SavedScenario, ScenarioResult } from '../types/energy'
 
@@ -240,6 +241,10 @@ export function DashboardPage() {
             />
 
             <SavedScenariosList scenarios={savedScenarios} />
+
+            <ErrorBoundary>
+              <ChatPanel />
+            </ErrorBoundary>
           </div>
         </div>
 
