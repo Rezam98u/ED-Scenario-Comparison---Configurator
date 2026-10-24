@@ -158,7 +158,7 @@ SMALL_DATASET = {
 @pytest.fixture
 def fake_dataset(monkeypatch):
     # Replace load_dataset so the endpoint tests do not need a database
-    monkeypatch.setattr(store, "load_dataset", lambda: SMALL_DATASET)
+    monkeypatch.setattr(store, "load_dataset", lambda dataset_id=None: SMALL_DATASET)
 
 
 def test_calculate_returns_scenario_and_kpis(fake_dataset):
@@ -178,7 +178,7 @@ def test_calculate_accepts_float(fake_dataset):
 
 def test_calculate_negative_pv_returns_400(monkeypatch):
     # No fake_dataset: the check runs before the database is touched
-    def must_not_be_called():
+    def must_not_be_called(dataset_id=None):
         raise AssertionError("load_dataset should not be called")
 
     monkeypatch.setattr(store, "load_dataset", must_not_be_called)
@@ -223,7 +223,7 @@ def test_calculate_database_error_returns_500(broken_database):
 
 
 def test_calculate_no_data_returns_404(monkeypatch):
-    def no_data():
+    def no_data(dataset_id=None):
         raise main.HTTPException(status_code=404, detail="No energy data. Run migrations and seed.")
 
     monkeypatch.setattr(store, "load_dataset", no_data)

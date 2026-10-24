@@ -57,7 +57,7 @@ def fake_db(monkeypatch):
     def insert_scenario(id, pv_kw, kpis, saved_at):
         rows.insert(0, store.SavedScenario(id=id, pvKw=pv_kw, kpis=kpis, savedAt=store.to_js_iso(saved_at)))
 
-    monkeypatch.setattr(store, "load_dataset", lambda: DATASET)
+    monkeypatch.setattr(store, "load_dataset", lambda dataset_id=None: DATASET)
     monkeypatch.setattr(store, "insert_scenario", insert_scenario)
     monkeypatch.setattr(store, "fetch_scenarios", lambda: list(rows))
     return rows
@@ -131,7 +131,7 @@ def test_tool_errors_are_returned_to_the_model(fake_db, name, arguments, message
 
 
 def test_tool_reports_database_errors_by_message(monkeypatch):
-    def no_data():
+    def no_data(dataset_id=None):
         raise store.HTTPException(status_code=404, detail=store.NO_DATA_ERROR)
 
     monkeypatch.setattr(store, "load_dataset", no_data)

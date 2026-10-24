@@ -100,7 +100,7 @@ def test_peak_tie_returns_earliest_hour():
 
 def test_analysis_endpoint(monkeypatch):
     # Replace load_dataset so this test does not need a database
-    monkeypatch.setattr(store, "load_dataset", lambda: TWO_DAYS)
+    monkeypatch.setattr(store, "load_dataset", lambda dataset_id=None: TWO_DAYS)
 
     response = client.get("/api/energy/analysis")
     assert response.status_code == 200
@@ -127,7 +127,7 @@ def test_analysis_database_error_returns_500(monkeypatch):
 
 
 def test_analysis_no_data_returns_404(monkeypatch):
-    def no_data():
+    def no_data(dataset_id=None):
         raise main.HTTPException(status_code=404, detail="No energy data. Run migrations and seed.")
 
     monkeypatch.setattr(store, "load_dataset", no_data)

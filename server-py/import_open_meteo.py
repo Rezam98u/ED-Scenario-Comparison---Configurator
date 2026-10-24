@@ -1,4 +1,5 @@
-"""Seed script: fills EnergyDataset with real data (the mock dataset is only used on main).
+"""Seed script: imports a period of real data into EnergyDataset (the mock dataset is only
+used on main). A period already imported with the same settings is reused, not duplicated.
 
 - PV generation: Open-Meteo historical weather API (tilted irradiance) converted to kWh
 - Consumption: BDEW G0 standard load profile (commercial), scaled to an annual kWh total
@@ -11,16 +12,14 @@ Every flag is optional; see DEFAULTS below.
 import argparse
 import json
 import sys
-import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
-from psycopg.types.json import Jsonb
 
+import store
 from calculations import calculate_scenario, js_round, js_sum
-from db import connect
 
 DEFAULTS = {
     "lat": "51.2277",  # Düsseldorf, NRW
@@ -158,16 +157,27 @@ def to_js_iso(t: datetime) -> str:
     return t.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def build_dataset(opts: dict) -> dict:
-    """The EnergyDataset row for these options (fetches from Open-Meteo, no database)."""
-    error = "--start and --end must be YYYY-MM-DD dates with start <= end"
+def parse_period(opts: dict) -> tuple:
+    """(start, end) dates from the options. Raises ValueError for bad dates."""
+    error = "start and end must be YYYY-MM-DD dates with start <= end"
     try:
         start_day, end_day = date.fromisoformat(opts["start"]), date.fromisoformat(opts["end"])
     except ValueError:
         raise ValueError(error) from None
     if end_day < start_day:
         raise ValueError(error)
+    return start_day, end_day
 
+
+def dataset_params(opts: dict) -> dict:
+    """The import settings as numbers, stored with the dataset to tell periods apart
+    (so "10" and "10.0" kWp are the same dataset)."""
+    return {name: float(opts[name]) for name in DEFAULTS if name not in ("start", "end")}
+
+
+def build_dataset(opts: dict) -> dict:
+    """The EnergyDataset row for these options (fetches from Open-Meteo, no database)."""
+    start_day, end_day = parse_period(opts)
     start = datetime(start_day.year, start_day.month, start_day.day, tzinfo=timezone.utc)
     hours = ((end_day - start_day).days + 1) * 24
 
@@ -183,6 +193,7 @@ def build_dataset(opts: dict) -> dict:
         "label": f"open-meteo {opts['lat']},{opts['lon']} {opts['kwp']} kWp + BDEW G0",
         "rangeStart": start_day,
         "rangeEnd": end_day,
+        "params": dataset_params(opts),
         "timestamps": [to_js_iso(start + i * HOUR) for i in range(hours)],
         "baseline": baseline,
         "scenario": result["scenario"],
@@ -190,21 +201,17 @@ def build_dataset(opts: dict) -> dict:
     }
 
 
-def save_dataset(row: dict) -> None:
-    # Both backends serve the oldest row, so any previous dataset has to go.
-    # One transaction: if the insert fails, the old dataset stays.
-    with connect() as conn:
-        conn.execute('DELETE FROM "EnergyDataset"')
-        conn.execute(
-            'INSERT INTO "EnergyDataset" '
-            '(id, label, "rangeStart", "rangeEnd", timestamps, baseline, scenario, kpis) '
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            (
-                str(uuid.uuid4()), row["label"], row["rangeStart"], row["rangeEnd"],
-                Jsonb(row["timestamps"]), Jsonb(row["baseline"]),
-                Jsonb(row["scenario"]), Jsonb(row["kpis"]),
-            ),
-        )
+def import_period(opts: dict) -> tuple:
+    """(dataset summary, created). Reuses the dataset if this period was already
+    imported with the same settings; otherwise fetches it and stores a new one.
+
+    Raises ValueError (bad dates) or RuntimeError (Open-Meteo).
+    """
+    start_day, end_day = parse_period(opts)
+    existing = store.find_dataset(start_day, end_day, dataset_params(opts))
+    if existing:
+        return existing, False
+    return store.insert_dataset(build_dataset(opts)), True
 
 
 def main() -> None:
@@ -214,17 +221,12 @@ def main() -> None:
     opts = vars(parser.parse_args())
 
     try:
-        row = build_dataset(opts)
+        dataset, created = import_period(opts)
     except (ValueError, RuntimeError) as error:
         sys.exit(f"Error: {error}")
-    save_dataset(row)
 
-    consumption = js_round(js_sum(row["baseline"]["consumption"]), 10)
-    pv = js_round(js_sum(row["baseline"]["pv_generation"]), 10)
-    print(f"Imported {len(row['timestamps'])} hours ({opts['start']} to {opts['end']}) "
-          f"at {opts['lat']},{opts['lon']}:")
-    print(f"  consumption {consumption} kWh, PV {pv} kWh ({opts['kwp']} kWp)")
-
+    action = "Imported" if created else "Already imported"
+    print(f"{action} {dataset['start']} to {dataset['end']} ({dataset['label']}), id {dataset['id']}")
 
 if __name__ == "__main__":
     main()

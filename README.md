@@ -170,7 +170,7 @@ python import_open_meteo.py --start 2026-10-01 --end 2026-10-07 --kwp 10
 | `--pr` | `0.85` | Performance ratio |
 | `--annual-kwh` | `75000` | Yearly consumption the G0 profile is scaled to (≈ 1,430 kWh/week) |
 
-The API serves the oldest `EnergyDataset` row, so the script replaces the existing rows (in one transaction; safe to re-run). The tests never call Open-Meteo: they use a snapshot of the default week in `server-py/tests/fixtures/baseline_2026-08-01_2026-08-07.json`. The most recent days come from weather models and are later corrected by Open-Meteo's reanalysis, so re-running the import a few days later can change them slightly.
+Each imported period is its own `EnergyDataset` row. A period already imported with the same settings is reused, so re-running the script is safe. The API serves the **oldest** row by default; other periods are picked with `?datasetId=` (see [Datasets](#datasets)). The tests never call Open-Meteo: they use a snapshot of the default week in `server-py/tests/fixtures/baseline_2026-08-01_2026-08-07.json`. The most recent days come from weather models and are later corrected by Open-Meteo's reanalysis. An imported period is reused, not refreshed, so a week imported right after it ended keeps the first (uncorrected) values.
 
 ---
 
@@ -202,9 +202,13 @@ FastAPI can always be called directly, e.g. `curl http://localhost:8000/api/ener
 | `GET`  | `/api/energy`           | Fetch the full energy dataset (timestamps, baseline, scenario, KPIs) |
 | `POST` | `/api/energy/calculate` | Scenario for a PV size: body `{ pvKw }` → `{ scenario, kpis }`       |
 | `GET`  | `/api/energy/analysis`  | Daily stats and hourly profile of the baseline                       |
+| `GET`  | `/api/energy/datasets`  | List the imported periods (oldest first; the first is the default)   |
+| `POST` | `/api/energy/datasets`  | Import a period: body `{ start, end }` → `201`, or `200` if it exists |
 | `GET`  | `/api/energy/scenarios` | List all saved scenarios (newest first)                              |
 | `POST` | `/api/energy/scenarios` | Save a new scenario (`{ pvKw: number, kpis: Kpis }`) → `201`         |
 | `POST` | `/api/chat`             | Run the AI agent on a conversation (`{ messages: ChatMessage[] }`)   |
+
+`/api/energy`, `/api/energy/calculate` and `/api/energy/analysis` take an optional `?datasetId=<id>`; without it they use the default dataset.
 
 Errors are always JSON with an `error` message (the frontend reads `body.error`, not FastAPI's default `detail`):
 
@@ -214,9 +218,21 @@ Errors are always JSON with an `error` message (the frontend reads `body.error`,
 | `400`  | Invalid `POST /api/energy/calculate` body | `pvKw (number) is required`                                          |
 | `400`  | Negative `pvKw` in `/api/energy/calculate`| `PV capacity cannot be negative`                                     |
 | `400`  | Invalid `POST /api/chat` body             | `Invalid request body`                                               |
+| `400`  | Invalid `POST /api/energy/datasets` body  | `start and end (YYYY-MM-DD) are required`, or why the period is not allowed |
+| `404`  | Unknown `?datasetId=`                     | `Dataset not found.`                                                 |
 | `404`  | `EnergyDataset` table is empty            | `No energy data. Run migrations and seed.`                           |
 | `500`  | Database unreachable or query failed      | `Database error. Check DATABASE_URL and that PostgreSQL is running.` |
+| `502`  | Open-Meteo failed during an import        | `Could not load weather data: ...`                                   |
 | `503`  | `/api/chat` without `GROQ_API_KEY`        | `GROQ_API_KEY is not configured on the server.`                      |
+
+### Datasets
+
+Each imported period is one row in `EnergyDataset`, identified by its dates plus its import settings (`params`: location, kWp, tilt, azimuth, PR, annual kWh; a unique index prevents duplicates).
+
+- `POST /api/energy/datasets` with `{ "start": "2026-10-01", "end": "2026-10-07" }` imports that week with the default settings (Düsseldorf, 10 kWp, …). It returns the dataset summary: `201` when it was imported now, `200` when it already existed (no new Open-Meteo call).
+- Limits: `end` not before `start`, at most 31 days, and data only up to yesterday (UTC).
+- `GET /api/energy/datasets` returns `[{ id, label, start, end, params, createdAt }]`, oldest first. The first entry is the default that the dashboard shows.
+- The dashboard and the AI agent still use the default dataset; choosing a period in the UI comes next.
 
 ---
 

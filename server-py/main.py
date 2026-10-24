@@ -6,8 +6,10 @@ Run from server-py/:  uvicorn main:app --reload   (http://localhost:8000, docs a
 import logging
 import math
 import os
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +18,7 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import agent
+import import_open_meteo
 import store
 from analysis import analyze_baseline
 from calculations import calculate_scenario
@@ -82,6 +85,24 @@ class HourlyProfilePoint(BaseModel):
     pv_kwh: float
 
 
+class NewDataset(BaseModel):
+    """Request body of POST /api/energy/datasets."""
+
+    start: date
+    end: date
+
+
+class DatasetSummary(BaseModel):
+    """One entry of GET /api/energy/datasets (a dataset without its hourly values)."""
+
+    id: str
+    label: str
+    start: str  # YYYY-MM-DD
+    end: str
+    params: Optional[dict]  # import settings; None for datasets from before params existed
+    createdAt: str
+
+
 class AnalysisResponse(BaseModel):
     """Response of GET /api/energy/analysis."""
 
@@ -110,6 +131,7 @@ DEFAULT_VALIDATION_ERROR = "pvKw (number) and kpis (object) are required"
 VALIDATION_ERRORS = {
     "/api/energy/calculate": "pvKw (number) is required",
     "/api/chat": "Invalid request body",
+    "/api/energy/datasets": "start and end (YYYY-MM-DD) are required",
 }
 
 
@@ -142,13 +164,48 @@ def save_scenario(body: NewScenario):
     return store.add_scenario(body.pvKw, body.kpis)
 
 
+# Every energy endpoint takes an optional ?datasetId=; without it, the default (oldest)
+# dataset is used.
+
+
 @app.get("/api/energy")
-def get_energy():
-    return store.load_dataset()
+def get_energy(datasetId: Optional[str] = None):
+    return store.load_dataset(datasetId)
+
+
+@app.get("/api/energy/datasets", response_model=list[DatasetSummary])
+def list_datasets():
+    """All datasets, oldest first; the first one is the default."""
+    return store.list_datasets()
+
+
+MAX_DATASET_DAYS = 31  # longer periods make the hourly chart unreadable
+
+
+@app.post("/api/energy/datasets", response_model=DatasetSummary)
+def import_dataset(body: NewDataset):
+    """Import a period from Open-Meteo (201), or return it if it already exists (200)."""
+    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+    if body.end < body.start:
+        raise HTTPException(status_code=400, detail="end must not be before start")
+    if (body.end - body.start).days + 1 > MAX_DATASET_DAYS:
+        raise HTTPException(status_code=400, detail=f"A dataset can cover at most {MAX_DATASET_DAYS} days")
+    if body.end > yesterday:
+        raise HTTPException(status_code=400, detail=f"Data is only available up to yesterday ({yesterday})")
+
+    opts = {**import_open_meteo.DEFAULTS, "start": body.start.isoformat(), "end": body.end.isoformat()}
+    try:
+        dataset, created = import_open_meteo.import_period(opts)
+    except ValueError as err:  # dates Open-Meteo has no data for (e.g. before 1940)
+        raise HTTPException(status_code=400, detail=str(err))
+    except (RuntimeError, httpx.HTTPError) as err:
+        logger.exception("Open-Meteo error")
+        raise HTTPException(status_code=502, detail=f"Could not load weather data: {err}")
+    return JSONResponse(status_code=201 if created else 200, content=dataset)
 
 
 @app.post("/api/energy/calculate", response_model=ScenarioResult)
-def calculate(body: CalculateRequest):
+def calculate(body: CalculateRequest, datasetId: Optional[str] = None):
     # Python's JSON parser accepts NaN and Infinity (JSON itself does not), so reject them
     if not math.isfinite(body.pvKw):
         raise RequestValidationError([])
@@ -156,13 +213,13 @@ def calculate(body: CalculateRequest):
     if body.pvKw < 0:
         raise HTTPException(status_code=400, detail="PV capacity cannot be negative")
 
-    dataset = store.load_dataset()
+    dataset = store.load_dataset(datasetId)
     return calculate_scenario(dataset["baseline"], body.pvKw)
 
 
 @app.get("/api/energy/analysis", response_model=AnalysisResponse)
-def get_analysis():
-    result = analyze_baseline(store.load_dataset())
+def get_analysis(datasetId: Optional[str] = None):
+    result = analyze_baseline(store.load_dataset(datasetId))
     # analysis.py uses Python names; the API uses camelCase like the rest of the JSON
     return {
         "daily": result["daily"],
