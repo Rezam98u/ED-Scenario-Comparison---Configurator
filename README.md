@@ -10,13 +10,12 @@ A full-stack web application for visualizing energy consumption and PV (photovol
 
 ## Branches
 
-The project has one main line and two feature branches. Both feature branches start from `main` and are independent of each other. Each feature is documented in the README of its own branch.
+The project has two branches: `main` and this branch, which starts from `main`. Each is documented in its own README.
 
 | Branch | Feature | Documentation |
 | ------ | ------- | ------------- |
 | `main` | The dashboard (React + Express/Prisma + PostgreSQL, mock data) | [README on `main`](https://github.com/Rezam98u/ED-Scenario-Comparison---Configurator/blob/main/README.md) |
 | `migration/express-to-fastapi` (this branch) | FastAPI backend only, AI agent, real data | this README |
-| `feature/ai-agent-integration` | AI assistant (chat + PV optimizer) with the Express backend | README on that branch |
 
 Switch branches with `git switch <branch>`, then reinstall dependencies: `npm install` in the root, and on this branch `pip install -r requirements.txt` in `server-py/` (on `main`, also `npm install` in `server/`).
 
