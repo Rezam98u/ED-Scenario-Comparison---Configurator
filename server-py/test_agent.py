@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 import agent
 import main
 import store
+from analysis import analyze_baseline
 from calculations import calculate_scenario
 from optimizer import optimize_scenario
 
@@ -20,7 +21,7 @@ client = TestClient(main.app)
 
 BASELINE = {"consumption": [10, 20, 30, 20], "pv_generation": [0, 4, 6, 0]}
 DATASET = {
-    "timestamps": ["2026-08-01T00:00:00.000Z"] * 4,
+    "timestamps": [f"2026-08-01T{h:02d}:00:00.000Z" for h in (10, 11, 12, 13)],
     "baseline": BASELINE,
     "scenario": BASELINE,
     "kpis": {"total_consumption_kwh": 80, "pv_coverage_pct": 12.5, "co2_savings_ton": 0},
@@ -106,9 +107,34 @@ def test_calculate_tool(fake_db):
     assert result == {"pvKw": 10, "kpis": calculate_scenario(BASELINE, 10)["kpis"]}
 
 
-def test_get_energy_data_tool(fake_db):
+def test_get_energy_data_returns_a_summary_not_hourly_values(fake_db):
     result = json.loads(agent.run_tool("getEnergyData", "", new_turn()))
-    assert result == {"timestamps": DATASET["timestamps"], "baseline": BASELINE, "baselineKpis": DATASET["kpis"]}
+    analysis = analyze_baseline(DATASET)
+    assert result == {
+        "start": "2026-08-01",
+        "end": "2026-08-01",
+        "hours": 4,
+        "baseline": {"consumptionKwh": 80, "pvGenerationKwh": 10, "pvCoveragePct": 12.5},
+        "dashboardScenario": {"addedPvKw": 10, "kpis": DATASET["kpis"]},
+        "daily": analysis["daily"],
+        "hourlyProfileUtc": analysis["hourly_profile"],
+        "peakConsumptionHourUtc": 12,
+        "peakPvHourUtc": 12,
+    }
+    assert "timestamps" not in result and "consumption" not in result["baseline"]  # no hourly lists
+
+
+def test_get_energy_data_stays_small_for_a_31_day_period(monkeypatch):
+    hours = 31 * 24
+    month = {
+        **DATASET,
+        "timestamps": [f"2026-08-{1 + h // 24:02d}T{h % 24:02d}:00:00.000Z" for h in range(hours)],
+        "baseline": {"consumption": [5.123] * hours, "pv_generation": [2.456] * hours},
+    }
+    monkeypatch.setattr(store, "load_dataset", lambda dataset_id=None: month)
+    content = agent.run_tool("getEnergyData", "", new_turn())
+    # ~4 characters per token: well under the free plan's 8,000 tokens per minute
+    assert len(content) < 8_000
 
 
 def test_optimize_tool_downsamples_the_search_path(fake_db):

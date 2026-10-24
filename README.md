@@ -278,7 +278,9 @@ The dashboard ships with a Groq-powered chat agent that can answer natural-langu
 
 3. Restart FastAPI. The assistant panel on the dashboard will become usable.
 
-The model is the `MODEL` constant in `server-py/agent.py`. Groq retires models over time; `llama-3.3-70b-versatile` is no longer offered, so pick a tool-calling model that your key lists (for example `openai/gpt-oss-120b`).
+The model is the `MODEL` constant in `server-py/agent.py`: `openai/gpt-oss-120b`, which works on Groq's free plan (about 1,000 requests a day and 8,000 tokens a minute per account). Groq retires models over time (`llama-3.3-70b-versatile` is gone); if this one disappears, pick another tool-calling model your key lists.
+
+To stay within the free plan's per-minute token limit, `getEnergyData` returns a summary of the period (totals, per-day values, hourly profile, peaks) instead of every hourly value.
 
 ### Architecture
 
@@ -301,7 +303,7 @@ User → ChatPanel.tsx → POST /api/chat → run_agent loop (agent.py) → Groq
 | Tool                | Purpose                                                              |
 | ------------------- | -------------------------------------------------------------------- |
 | `loadPeriod`        | Load a period (`start`, `end`), importing it if needed; the dashboard switches to it |
-| `getEnergyData`     | Return the current period's hourly baseline + KPIs                   |
+| `getEnergyData`     | Summarize the current period: baseline totals and coverage, the dashboard scenario (baseline + 10 kW) KPIs, per-day values, hourly profile, peaks |
 | `calculateScenario` | Simulate KPIs for a specific `pvKw`                                  |
 | `optimizeScenario`  | Grid-search best `pvKw` for `co2` / `coverage` / `minConsumption`    |
 | `listScenarios`     | Read the saved scenarios from the `SavedScenario` table              |

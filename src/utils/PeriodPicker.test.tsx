@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { PeriodPicker, formatPeriod, periodError, yesterdayUtc } from '../components/PeriodPicker'
+import { PeriodPicker } from '../components/PeriodPicker'
+import { formatPeriod, periodError, yesterdayUtc } from './period'
 import type { DatasetSummary } from '../types/energy'
 
 const dataset = (id: string, start: string, end: string): DatasetSummary => ({

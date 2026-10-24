@@ -15,10 +15,12 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 
 import import_open_meteo
 import store
-from calculations import calculate_scenario
+from analysis import analyze_baseline
+from calculations import calculate_scenario, js_round, js_sum
 from optimizer import OBJECTIVES, optimize_scenario, score
 
-MODEL = "llama-3.3-70b-versatile"
+# A tool-calling model on Groq's free plan (llama-3.3-70b-versatile was retired)
+MODEL = "openai/gpt-oss-120b"
 MAX_STEPS = 6
 
 SYSTEM_PROMPT = """You are the AI assistant for an Energy Dashboard that compares baseline vs. scenario energy consumption with rooftop PV, using hourly data for one period at a time.
@@ -33,12 +35,14 @@ Rules:
 - When the user asks for the "best", "optimal", or "ideal" PV size, call optimizeScenario.
 - When the user asks a "what if" question about a specific PV size, call calculateScenario.
 - When saving a scenario, you do NOT need the user to supply KPIs — the saveScenario tool computes them from the period's baseline.
-- KPI meanings (report these verbatim from tool output, do not recompute):
+- Baseline vs. scenario: the baseline is the existing PV system on its own; a scenario adds PV capacity (pvKw) on top. Never combine a baseline number with a scenario KPI in one statement, and say which one each number belongs to.
+- KPI meanings for a scenario (report these verbatim from tool output, do not recompute):
   - total_consumption_kwh: total grid consumption across the whole period, in kWh.
   - pv_coverage_pct: total PV generation divided by total consumption across the whole period, in %. This is an aggregate, not a daily average — phrase it as "PV coverage" unless the user explicitly asks about daily values.
   - co2_savings_ton: avoided grid emissions across the whole period, in metric tons.
 - Always include units: kWh, %, tons (t).
-- Keep answers concise (2-4 sentences). If a tool returns a lot of data, summarize it."""
+- Keep answers concise (2-4 sentences). If a tool returns a lot of data, summarize it.
+- The chat shows plain text: do not use Markdown (no **bold**, no # headings, no tables). Short lines starting with "- " are fine."""
 
 
 @dataclass
@@ -133,7 +137,7 @@ TOOL_SCHEMAS = [
     ),
     _tool(
         "getEnergyData",
-        "Return the hourly baseline data of the current period (timestamps, consumption kWh, PV generation kWh) and its baseline KPIs. Call this first if you need to know what data is available before doing calculations.",
+        "Summarize the current period. 'baseline' is the existing system on its own (consumption, PV generation, PV coverage); 'dashboardScenario' is the baseline plus 10 kW of added PV, as the dashboard's KPI cards show it. Also per-day totals with autarky, the average hourly profile (UTC) and peak hours. For other added PV sizes, use calculateScenario.",
     ),
     _tool(
         "calculateScenario",
@@ -179,7 +183,29 @@ def load_period(args: dict, turn: Turn) -> dict:
 def get_energy_data(args: dict, turn: Turn) -> dict:
     NoArgs.model_validate(args)
     dataset = store.load_dataset(turn.dataset_id)
-    return {"timestamps": dataset["timestamps"], "baseline": dataset["baseline"], "baselineKpis": dataset["kpis"]}
+    analysis = analyze_baseline(dataset)
+    # A summary, not the hourly values: those are ~5,000 tokens for one week, too much
+    # for the free plan's per-minute token limit
+    timestamps = dataset["timestamps"]
+    consumption = js_sum(dataset["baseline"]["consumption"])
+    pv = js_sum(dataset["baseline"]["pv_generation"])
+    return {
+        "start": timestamps[0][:10] if timestamps else None,
+        "end": timestamps[-1][:10] if timestamps else None,
+        "hours": len(timestamps),
+        # Kept apart and named, so the model does not mix baseline totals with the
+        # scenario's KPIs (which include the added PV)
+        "baseline": {
+            "consumptionKwh": js_round(consumption, 10),
+            "pvGenerationKwh": js_round(pv, 10),
+            "pvCoveragePct": js_round(pv / consumption * 100, 10) if consumption > 0 else 0,
+        },
+        "dashboardScenario": {"addedPvKw": import_open_meteo.SCENARIO_PV_KW, "kpis": dataset["kpis"]},
+        "daily": analysis["daily"],
+        "hourlyProfileUtc": analysis["hourly_profile"],
+        "peakConsumptionHourUtc": analysis["peak_consumption_hour"],
+        "peakPvHourUtc": analysis["peak_pv_hour"],
+    }
 
 
 def calculate(args: dict, turn: Turn) -> dict:

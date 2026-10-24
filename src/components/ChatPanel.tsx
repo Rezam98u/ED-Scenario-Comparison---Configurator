@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useChat } from '../hooks/useChat'
+import type { UseChatResult } from '../hooks/useChat'
 import type { ChatMessage, ChatToolCall } from '../../shared/types'
 
 const EXAMPLE_PROMPTS = [
@@ -77,13 +77,10 @@ function MessageRow({ msg }: { msg: ChatMessage }) {
   )
 }
 
-interface ChatPanelProps {
-  datasetId: string | null
-  onShowDataset: (datasetId: string) => void
-}
-
-export function ChatPanel({ datasetId, onShowDataset }: ChatPanelProps) {
-  const { messages, sendMessage, reset, isPending, error } = useChat({ datasetId, onShowDataset })
+// The chat state comes from the page (useChat in DashboardPage), so the conversation
+// survives the page's loading skeleton when the agent switches the period.
+export function ChatPanel({ chat }: { chat: UseChatResult }) {
+  const { messages, sendMessage, reset, isPending, error } = chat
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -103,7 +100,7 @@ export function ChatPanel({ datasetId, onShowDataset }: ChatPanelProps) {
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">AI Assistant</h3>
-          <p className="text-xs text-gray-500">Groq + Llama 3.3 70B with tools</p>
+          <p className="text-xs text-gray-500">Groq + gpt-oss-120b with tools</p>
         </div>
         {messages.length > 0 && (
           <button

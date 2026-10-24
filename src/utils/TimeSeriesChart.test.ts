@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatXAxisTick } from '../components/TimeSeriesChart'
+import { formatXAxisTick } from './chartFormat'
 
 // Timestamps without 'Z' are parsed as local time by JavaScript,
 // so toLocaleTimeString returns the same hour/minute regardless of the machine's timezone.

@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { chatApi } from '../api/chatApi'
 import type { ChatMessage } from '../../shared/types'
 
-interface UseChatResult {
+export interface UseChatResult {
   messages: ChatMessage[]
   sendMessage: (text: string) => void
   reset: () => void

@@ -8,7 +8,9 @@ import { ErrorState } from './ErrorState'
 import { ErrorBoundary } from './ErrorBoundary'
 import { AnalysisSection } from './AnalysisSection'
 import { ChatPanel } from './ChatPanel'
-import { PeriodPicker, formatPeriod } from './PeriodPicker'
+import { useChat } from '../hooks/useChat'
+import { PeriodPicker } from './PeriodPicker'
+import { formatPeriod } from '../utils/period'
 import { energyApi, type DatasetId } from '../api/energyApi'
 import type {
   DatasetSummary, EnergyApiResponse, ChartDataPoint, Kpis, SavedScenario, ScenarioResult,
@@ -172,6 +174,10 @@ export function DashboardPage() {
     setDatasetId(id === defaultDatasetId ? null : id)
   }, [defaultDatasetId])
 
+  // Kept here, not in ChatPanel: switching the period shows the loading skeleton,
+  // which unmounts the panel and would otherwise lose the conversation
+  const chat = useChat({ datasetId, onShowDataset: showDataset })
+
   const currentScenario = scenarioQuery.data?.scenario ?? null
   const currentKpis = scenarioQuery.data?.kpis ?? null
   // Placeholder KPIs belong to the previous pvKw, so they must not be saved with the new one
@@ -323,7 +329,7 @@ export function DashboardPage() {
             <SavedScenariosList scenarios={savedScenarios} datasets={datasets ?? []} />
 
             <ErrorBoundary>
-              <ChatPanel datasetId={datasetId} onShowDataset={showDataset} />
+              <ChatPanel chat={chat} />
             </ErrorBoundary>
           </div>
         </div>

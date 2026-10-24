@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatDay, peakText } from '../components/AnalysisSection'
+import { formatDay, peakText } from './chartFormat'
 
 describe('AnalysisSection helpers', () => {
   it('formats the peak hours as text', () => {

@@ -11,6 +11,7 @@ import {
   Brush,
 } from 'recharts'
 import type { ChartDataPoint } from '../types/energy'
+import { formatXAxisTick } from '../utils/chartFormat'
 
 interface TimeSeriesChartProps {
   data: ChartDataPoint[]
@@ -65,15 +66,6 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   }
 
   return null
-}
-
-export const formatXAxisTick = (tickItem: string) => {
-  const date = new Date(tickItem)
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
 }
 
 // we used React.memo to avoid unnecessary rerender through ParentClass (DashboardPage)

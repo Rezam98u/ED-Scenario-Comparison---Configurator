@@ -16,25 +16,11 @@ import { energyApi, type DatasetId } from '../api/energyApi'
 import { ChartSkeleton } from './LoadingSkeleton'
 import { ErrorState } from './ErrorState'
 import type { EnergyAnalysis } from '../types/energy'
+import { formatDay, formatHour, peakText } from '../utils/chartFormat'
 
 // Same colors as TimeSeriesChart, so consumption and PV look the same everywhere
 const CONSUMPTION_COLOR = '#DC2626'
 const PV_COLOR = '#059669'
-
-// "2025-01-01" is a UTC day, so format it in UTC (otherwise it could shift a day)
-export const formatDay = (date: string) =>
-  new Date(`${date}T00:00:00Z`).toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: 'UTC',
-  })
-
-export const formatHour = (hour: number) => `${hour} Uhr`
-
-export function peakText(analysis: EnergyAnalysis): string {
-  const show = (hour: number | null) => (hour === null ? '–' : `${formatHour(hour)} (UTC)`)
-  return `Verbrauchsspitze: ${show(analysis.peakConsumptionHour)}, PV-Spitze: ${show(analysis.peakPvHour)}`
-}
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
