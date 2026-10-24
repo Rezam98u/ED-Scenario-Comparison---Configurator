@@ -107,7 +107,7 @@
 
 ## Seeding the Database
 
-- Run `alembic upgrade head` (in `server-py/`) then `npm run db:seed` (in `server/`) once after setting up the database. Tables are managed by Alembic, not Prisma.
+- Run `alembic upgrade head` (in `server-py/`) then `python import_open_meteo.py` (also in `server-py/`) once after setting up the database. Tables are managed by Alembic, not Prisma.
 - The seed script wipes existing `EnergyDataset` rows before inserting — safe to re-run.
 - Without seeding, `GET /api/energy` returns 404 and the dashboard shows no data.
-- Seed data source: real data from `server/prisma/importOpenMeteo.ts` (Open-Meteo PV + BDEW G0 consumption, Aug 1–7, 2026, Düsseldorf). Mock data is only used on `main`.
+- Seed data source: real data from `server-py/import_open_meteo.py` (Open-Meteo PV + BDEW G0 consumption, Aug 1–7, 2026, Düsseldorf). Mock data is only used on `main`.

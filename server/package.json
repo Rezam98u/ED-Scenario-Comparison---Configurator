@@ -8,8 +8,6 @@
     "build": "tsc",
     "start": "node dist/server/src/index.js",
     "db:generate": "prisma generate",
-    "db:seed": "tsx prisma/importOpenMeteo.ts",
-    "db:import-weather": "tsx prisma/importOpenMeteo.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -27,8 +25,5 @@
     "prisma": "^6.3.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
-  },
-  "prisma": {
-    "seed": "tsx prisma/importOpenMeteo.ts"
   }
 }

@@ -32,7 +32,7 @@ def js_round(value: float, factor: int) -> float:
     return rounded / factor
 
 
-def _js_sum(values: list) -> float:
+def js_sum(values: list) -> float:
     """Add up left to right, like JS reduce((s, v) => s + v, 0).
 
     Python 3.12+ sum() uses compensated summation for floats, which can give a
@@ -76,9 +76,9 @@ def calculate_scenario(baseline: dict, pv_kw: float) -> dict:
         scenario["consumption"].append(new_consumption)
         scenario["pv_generation"].append(new_pv_generation)
 
-    total_baseline_consumption = _js_sum(baseline["consumption"])
-    total_scenario_consumption = _js_sum(scenario["consumption"])
-    total_pv_generation = _js_sum(scenario["pv_generation"])
+    total_baseline_consumption = js_sum(baseline["consumption"])
+    total_scenario_consumption = js_sum(scenario["consumption"])
+    total_pv_generation = js_sum(scenario["pv_generation"])
 
     consumption_savings = total_baseline_consumption - total_scenario_consumption
     pv_coverage_pct = (

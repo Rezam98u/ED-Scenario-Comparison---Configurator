@@ -64,10 +64,7 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 .
 ├── shared/types.ts               # API types shared by frontend and backend (Kpis, SavedScenario)
 ├── server/                       # Backend 1: Express + Prisma (port 4000)
-│   ├── prisma/
-│   │   ├── data/bdew-g0.json     # BDEW G0 standard load profile (used by the importer)
-│   │   ├── importOpenMeteo.ts    # Seed script: real data (Open-Meteo PV + BDEW G0 load)
-│   │   └── schema.prisma
+│   ├── prisma/schema.prisma      # Prisma client schema (tables are created by Alembic)
 │   └── src/
 │       ├── routes/energy.ts
 │       ├── lib/prisma.ts
@@ -77,11 +74,14 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 │   ├── db.py                     # Database URL + connection (shared by the app and migrations)
 │   ├── alembic.ini               # Alembic configuration
 │   ├── migrations/               # Alembic migrations (database tables)
+│   ├── import_open_meteo.py      # Seed script: real data (Open-Meteo PV + BDEW G0 load)
+│   ├── data/bdew-g0.json         # BDEW G0 standard load profile (used by the seed script)
 │   ├── calculations.py           # Scenario calculation (port of calculateScenario.ts)
 │   ├── analysis.py               # Data analysis with pandas
 │   ├── test_main.py              # pytest tests (endpoints)
 │   ├── test_calculations.py      # parity tests against the TypeScript version
 │   ├── test_analysis.py          # analysis + GET /api/energy/analysis tests
+│   ├── test_import_open_meteo.py # seed script tests (no network, no database)
 │   ├── tests/                    # real-week snapshot, parity fixture + the script that generates it
 │   └── requirements.txt
 ├── src/
@@ -97,7 +97,7 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 
 ## Quick Start
 
-1. Install the Node dependencies: `npm install` in the root and in `server/` (the Express server also owns the migrations and the seed script).
+1. Install the Node dependencies: `npm install` in the root and in `server/` (the frontend and the Express server).
 2. Start PostgreSQL and load the data: see [Seeding the Database](#seeding-the-database).
 3. Start both backends and the frontend: see [Running the App: Express and FastAPI](#running-the-app-express-and-fastapi).
 4. Open <http://localhost:5173>.
@@ -121,16 +121,15 @@ The FastAPI backend keeps everything in one file, `server-py/main.py`, organized
 
 ## Seeding the Database
 
-This branch uses **real data** (the mock dataset is only used on `main`). The seed script, `server/prisma/importOpenMeteo.ts`, fills the `EnergyDataset` table with real hourly data, by default for Aug 1–7, 2026 in Düsseldorf (NRW).
+This branch uses **real data** (the mock dataset is only used on `main`). The seed script, `server-py/import_open_meteo.py`, fills the `EnergyDataset` table with real hourly data, by default for Aug 1–7, 2026 in Düsseldorf (NRW).
 
-Start the database, create the tables with **Alembic**, then run the seed once. Both backends read the same database. Alembic uses `DATABASE_URL_PY` (default `postgresql://postgres:postgres@localhost:5432/energy_dashboard`); the seed script needs `DATABASE_URL` in `server/.env`, e.g. `postgresql://postgres:postgres@localhost:5432/energy_dashboard?schema=public`. The seed calls the Open-Meteo API, so it needs internet access (no API key).
+Start the database, create the tables with **Alembic**, then run the seed once. Both backends read the same database. Alembic and the seed script use `DATABASE_URL_PY` (default `postgresql://postgres:postgres@localhost:5432/energy_dashboard`); Express reads `DATABASE_URL` from `server/.env`. The seed calls the Open-Meteo API, so it needs internet access (no API key). Both run in the Python virtual environment; create it first (see [Python Backend](#python-backend-fastapi)).
 
 ```bash
 docker compose up -d db
 cd server-py && source .venv/bin/activate
-alembic upgrade head # create the tables
-cd ../server
-npm run db:seed      # load real data into the database
+alembic upgrade head          # create the tables
+python import_open_meteo.py   # load real data into the database
 ```
 
 > Without seeding, the `GET /api/energy` endpoint returns a `404` and the dashboard will show no data.
@@ -140,11 +139,11 @@ npm run db:seed      # load real data into the database
 - **PV generation** — hourly global tilted irradiance from the [Open-Meteo historical weather API](https://open-meteo.com/en/docs/historical-weather-api) (no API key, data up to yesterday), converted with a simple performance-ratio model: `kWh = kWp × irradiance / 1000 × PR`.
 - **Consumption** — the BDEW **G0** standard load profile (commercial), with seasons, Saturdays, Sundays and NRW public holidays, scaled so the calendar year adds up to `--annual-kwh`.
 
-`npm run db:import-weather` runs the same script; pass flags to load a different period, place or system:
+Pass flags to load a different period, place or system:
 
 ```bash
-cd server
-npm run db:import-weather -- --start 2026-10-01 --end 2026-10-07 --kwp 10
+cd server-py
+python import_open_meteo.py --start 2026-10-01 --end 2026-10-07 --kwp 10
 ```
 
 | Flag | Default | Meaning |
@@ -329,8 +328,6 @@ The FastAPI backend calculates scenario values in `server-py/calculations.py` (p
 | -------------------- | ----------------------------------------- |
 | `npm run dev`        | Start API with hot reload (tsx watch)     |
 | `npm run build`      | Compile TypeScript                        |
-| `npm run db:seed`    | Seed database with real data (Open-Meteo PV + BDEW G0 consumption) |
-| `npm run db:import-weather` | Same script, for passing flags (period, location, kWp) |
 
 ### Python backend (`server-py/`, with the virtual environment active)
 
@@ -339,6 +336,7 @@ The FastAPI backend calculates scenario values in `server-py/calculations.py` (p
 | `uvicorn main:app --reload` | Start the FastAPI server on port 8000 with hot reload |
 | `pytest`                    | Run the backend tests                                |
 | `alembic upgrade head`      | Create or update the database tables                 |
+| `python import_open_meteo.py` | Seed the database with real data (Open-Meteo PV + BDEW G0 consumption); flags change period, location, kWp |
 | `alembic revision -m "..."` | Start a new migration in `migrations/versions/` (write the SQL by hand) |
 
 ---
