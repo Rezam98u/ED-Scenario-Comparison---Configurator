@@ -4,3 +4,4 @@ psycopg[binary]
 pytest
 httpx
 pandas
+alembic

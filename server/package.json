@@ -8,8 +8,6 @@
     "build": "tsc",
     "start": "node dist/server/src/index.js",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push",
     "db:seed": "tsx prisma/importOpenMeteo.ts",
     "db:import-weather": "tsx prisma/importOpenMeteo.ts",
     "postinstall": "prisma generate"

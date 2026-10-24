@@ -5,7 +5,6 @@ Run from server-py/:  uvicorn main:app --reload   (http://localhost:8000, docs a
 
 import logging
 import math
-import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Union
@@ -15,19 +14,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, StrictFloat, StrictInt
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from analysis import analyze_baseline
 from calculations import calculate_scenario
-
-# Prisma's DATABASE_URL ends with "?schema=public", which psycopg does not accept,
-# so the Python backend reads its own variable.
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL_PY", "postgresql://postgres:postgres@localhost:5432/energy_dashboard"
-)
+from db import connect
 
 logger = logging.getLogger(__name__)
 
@@ -154,11 +147,6 @@ def database_error() -> HTTPException:
     logger.exception("Database error")  # like console.error(err), with traceback
     # Same message as Express (here the variable is DATABASE_URL_PY)
     return HTTPException(status_code=500, detail=DATABASE_ERROR)
-
-
-def connect():
-    # connect_timeout=5 is the same as Prisma's default connection timeout
-    return psycopg.connect(DATABASE_URL, connect_timeout=5, row_factory=dict_row)
 
 
 def js_number(value: float) -> JsonNumber:

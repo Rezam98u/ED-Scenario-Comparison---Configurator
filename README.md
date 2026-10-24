@@ -65,7 +65,6 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 ├── shared/types.ts               # API types shared by frontend and backend (Kpis, SavedScenario)
 ├── server/                       # Backend 1: Express + Prisma (port 4000)
 │   ├── prisma/
-│   │   ├── migrations/           # SQL migrations
 │   │   ├── data/bdew-g0.json     # BDEW G0 standard load profile (used by the importer)
 │   │   ├── importOpenMeteo.ts    # Seed script: real data (Open-Meteo PV + BDEW G0 load)
 │   │   └── schema.prisma
@@ -75,6 +74,9 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 │       └── index.ts
 ├── server-py/                    # Backend 2: FastAPI + psycopg (port 8000)
 │   ├── main.py                   # App, Pydantic models, error handlers, routes
+│   ├── db.py                     # Database URL + connection (shared by the app and migrations)
+│   ├── alembic.ini               # Alembic configuration
+│   ├── migrations/               # Alembic migrations (database tables)
 │   ├── calculations.py           # Scenario calculation (port of calculateScenario.ts)
 │   ├── analysis.py               # Data analysis with pandas
 │   ├── test_main.py              # pytest tests (endpoints)
@@ -121,12 +123,13 @@ The FastAPI backend keeps everything in one file, `server-py/main.py`, organized
 
 This branch uses **real data** (the mock dataset is only used on `main`). The seed script, `server/prisma/importOpenMeteo.ts`, fills the `EnergyDataset` table with real hourly data, by default for Aug 1–7, 2026 in Düsseldorf (NRW).
 
-Start the database and run the seed once after applying migrations. Both backends read the same database, so this is needed for FastAPI too. The migrate and seed scripts need `DATABASE_URL` in `server/.env`, e.g. `postgresql://postgres:postgres@localhost:5432/energy_dashboard?schema=public`. The seed calls the Open-Meteo API, so it needs internet access (no API key).
+Start the database, create the tables with **Alembic**, then run the seed once. Both backends read the same database. Alembic uses `DATABASE_URL_PY` (default `postgresql://postgres:postgres@localhost:5432/energy_dashboard`); the seed script needs `DATABASE_URL` in `server/.env`, e.g. `postgresql://postgres:postgres@localhost:5432/energy_dashboard?schema=public`. The seed calls the Open-Meteo API, so it needs internet access (no API key).
 
 ```bash
 docker compose up -d db
-cd server
-npm run db:migrate   # apply schema migrations
+cd server-py && source .venv/bin/activate
+alembic upgrade head # create the tables
+cd ../server
 npm run db:seed      # load real data into the database
 ```
 
@@ -326,10 +329,8 @@ The FastAPI backend calculates scenario values in `server-py/calculations.py` (p
 | -------------------- | ----------------------------------------- |
 | `npm run dev`        | Start API with hot reload (tsx watch)     |
 | `npm run build`      | Compile TypeScript                        |
-| `npm run db:migrate` | Apply Prisma migrations                   |
 | `npm run db:seed`    | Seed database with real data (Open-Meteo PV + BDEW G0 consumption) |
 | `npm run db:import-weather` | Same script, for passing flags (period, location, kWp) |
-| `npm run db:push`    | Push schema without migrations (dev only) |
 
 ### Python backend (`server-py/`, with the virtual environment active)
 
@@ -337,12 +338,15 @@ The FastAPI backend calculates scenario values in `server-py/calculations.py` (p
 | --------------------------- | ---------------------------------------------------- |
 | `uvicorn main:app --reload` | Start the FastAPI server on port 8000 with hot reload |
 | `pytest`                    | Run the backend tests                                |
+| `alembic upgrade head`      | Create or update the database tables                 |
+| `alembic revision -m "..."` | Start a new migration in `migrations/versions/` (write the SQL by hand) |
 
 ---
 
 ## Notes
 
-- Saved scenarios are stored in the `SavedScenario` table (migration `20261024000000_saved_scenarios`), so they survive restarts and are shared by Express, FastAPI and the AI agent. Run `npm run db:migrate` in `server/` after pulling.
+- Saved scenarios are stored in the `SavedScenario` table, so they survive restarts and are shared by Express, FastAPI and the AI agent.
+- Database tables are managed by **Alembic** (`server-py/migrations/`), not Prisma. Run `alembic upgrade head` in `server-py/` after pulling. A database that Prisma set up before the switch already has the tables: run `alembic stamp head` once instead.
 - The seed script wipes existing `EnergyDataset` rows before inserting, so re-running it is safe.
 - The frontend calls the API on its own origin (`window.location.origin`); in development the Vite proxy forwards `/api/chat` to Express and all other `/api` requests to FastAPI (see `vite.config.ts`).
 
