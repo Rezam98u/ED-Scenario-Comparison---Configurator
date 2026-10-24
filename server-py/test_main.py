@@ -15,10 +15,27 @@ VALID_KPIS = {"total_consumption_kwh": 1430.7, "pv_coverage_pct": 7.6, "co2_savi
 INVALID_BODY_ERROR = {"error": "pvKw (number) and kpis (object) are required"}
 
 
-@pytest.fixture(autouse=True)
-def empty_store():
-    # The scenario store is a module-level list, so reset it before every test
-    main.saved_scenarios.clear()
+@pytest.fixture
+def store(monkeypatch):
+    """Replace the SavedScenario table with a list, so these tests do not need a database."""
+    rows = []
+
+    def insert_scenario(id, pv_kw, kpis, saved_at):
+        saved = main.SavedScenario(id=id, pvKw=pv_kw, kpis=kpis, savedAt=main.to_js_iso(saved_at))
+        rows.insert(0, saved)  # newest first, like ORDER BY "savedAt" DESC
+
+    monkeypatch.setattr(main, "insert_scenario", insert_scenario)
+    monkeypatch.setattr(main, "fetch_scenarios", lambda: list(rows))
+    return rows
+
+
+@pytest.fixture
+def broken_database(monkeypatch):
+    def broken_connect(*args, **kwargs):
+        raise psycopg.OperationalError("connection refused")
+
+    # Replace psycopg.connect so these tests do not need a running database
+    monkeypatch.setattr(main.psycopg, "connect", broken_connect)
 
 
 def test_health():
@@ -27,7 +44,7 @@ def test_health():
     assert response.json() == {"ok": True}
 
 
-def test_save_and_list_scenarios():
+def test_save_and_list_scenarios(store):
     first = client.post("/api/energy/scenarios", json={"pvKw": 5, "kpis": VALID_KPIS})
     assert first.status_code == 201
     assert '"pvKw":5,' in first.text  # 5 stays 5, not 5.0 (same as Express)
@@ -56,14 +73,14 @@ def test_save_and_list_scenarios():
         {"pvKw": 5, "kpis": {"pv_coverage_pct": 7.6}},  # kpis incomplete
     ],
 )
-def test_invalid_body_returns_400(body):
+def test_invalid_body_returns_400(store, body):
     response = client.post("/api/energy/scenarios", json=body)
     assert response.status_code == 400
     assert response.json() == INVALID_BODY_ERROR  # { error }, never { detail }
-    assert main.saved_scenarios == []
+    assert store == []
 
 
-def test_malformed_json_returns_400():
+def test_malformed_json_returns_400(store):
     response = client.post(
         "/api/energy/scenarios",
         content="{not json",
@@ -79,18 +96,28 @@ def test_unknown_route_uses_error_shape():
     assert response.json() == {"error": "Not Found"}
 
 
-def test_energy_database_error_returns_500(monkeypatch):
-    def broken_connect(*args, **kwargs):
-        raise psycopg.OperationalError("connection refused")
-
-    # Replace psycopg.connect so this test does not need a running database
-    monkeypatch.setattr(main.psycopg, "connect", broken_connect)
-
+def test_energy_database_error_returns_500(broken_database):
     response = client.get("/api/energy")
     assert response.status_code == 500
-    assert response.json() == {
-        "error": "Database error. Check DATABASE_URL and that PostgreSQL is running."
-    }
+    assert response.json() == {"error": main.DATABASE_ERROR}
+
+
+def test_list_scenarios_database_error_returns_500(broken_database):
+    response = client.get("/api/energy/scenarios")
+    assert response.status_code == 500
+    assert response.json() == {"error": main.DATABASE_ERROR}
+
+
+def test_save_scenario_database_error_returns_500(broken_database):
+    response = client.post("/api/energy/scenarios", json={"pvKw": 5, "kpis": VALID_KPIS})
+    assert response.status_code == 500
+    assert response.json() == {"error": main.DATABASE_ERROR}
+
+
+@pytest.mark.parametrize("value, expected", [(5.0, 5), (12.5, 12.5), (0.0, 0)])
+def test_js_number_prints_whole_floats_like_js(value, expected):
+    result = main.js_number(value)
+    assert result == expected and type(result) is type(expected)
 
 
 def test_energy_empty_table_returns_404(monkeypatch):
@@ -183,21 +210,15 @@ def test_calculate_malformed_or_non_finite_returns_400(fake_dataset, content):
     assert response.json() == CALCULATE_INVALID_BODY_ERROR
 
 
-def test_scenarios_keeps_its_own_validation_message():
+def test_scenarios_keeps_its_own_validation_message(store):
     response = client.post("/api/energy/scenarios", json={})
     assert response.json() == INVALID_BODY_ERROR
 
 
-def test_calculate_database_error_returns_500(monkeypatch):
-    def broken_connect(*args, **kwargs):
-        raise psycopg.OperationalError("connection refused")
-
-    monkeypatch.setattr(main.psycopg, "connect", broken_connect)
+def test_calculate_database_error_returns_500(broken_database):
     response = client.post("/api/energy/calculate", json={"pvKw": 10})
     assert response.status_code == 500
-    assert response.json() == {
-        "error": "Database error. Check DATABASE_URL and that PostgreSQL is running."
-    }
+    assert response.json() == {"error": main.DATABASE_ERROR}
 
 
 def test_calculate_no_data_returns_404(monkeypatch):

@@ -98,10 +98,10 @@
 
 ---
 
-## In-memory Scenario Storage
+## Scenario Storage
 
-- Saved scenarios are stored in a plain array (`savedScenarios[]`) in `server/src/routes/energy.ts`.
-- They reset on every server restart — this is intentional for the demo but noted as a natural next step to persist to the database.
+- Saved scenarios are stored in the PostgreSQL `SavedScenario` table (`server/src/agent/scenarioStore.ts` for Express and the agent, `fetch_scenarios` / `insert_scenario` in `server-py/main.py` for FastAPI).
+- They survive restarts and are shared by both backends, so scenarios saved by the AI agent appear in the dashboard.
 
 ---
 

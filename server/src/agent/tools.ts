@@ -86,7 +86,7 @@ export const toolSchemas = [
     type: 'function' as const,
     function: {
       name: 'listScenarios',
-      description: 'Return all scenarios the user has saved in this session.',
+      description: 'Return all scenarios the user has saved (from the dashboard or this chat), newest first.',
       parameters: { type: 'object', properties: {} },
     },
   },

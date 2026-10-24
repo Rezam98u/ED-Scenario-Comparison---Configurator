@@ -8,9 +8,18 @@ import type { Kpis } from '../../../shared/types.js'
 
 export const energyRouter = Router()
 
-energyRouter.get('/energy/scenarios', (_req, res) => { res.json(listScenarios()) })
+const DATABASE_ERROR = 'Database error. Check DATABASE_URL and that PostgreSQL is running.'
 
-energyRouter.post('/energy/scenarios', (req, res) => {
+energyRouter.get('/energy/scenarios', async (_req, res) => {
+  try {
+    res.json(await listScenarios())
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: DATABASE_ERROR })
+  }
+})
+
+energyRouter.post('/energy/scenarios', async (req, res) => {
 
   // req.body is untyped network input, so fields are optional until validated below
   const { pvKw, kpis } = req.body as { pvKw?: unknown; kpis?: unknown }
@@ -21,8 +30,12 @@ energyRouter.post('/energy/scenarios', (req, res) => {
   }
 
   // kpis was validated from the frontend; cast is safe here
-  const scenario = addScenario(pvKw, kpis as Kpis)
-  res.status(201).json(scenario)
+  try {
+    res.status(201).json(await addScenario(pvKw, kpis as Kpis))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: DATABASE_ERROR })
+  }
 })
 
 energyRouter.get('/energy', async (_req, res) => {
@@ -42,6 +55,6 @@ energyRouter.get('/energy', async (_req, res) => {
     })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Database error. Check DATABASE_URL and that PostgreSQL is running.' })
+    res.status(500).json({ error: DATABASE_ERROR })
   }
 })

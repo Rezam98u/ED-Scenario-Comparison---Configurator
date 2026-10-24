@@ -22,3 +22,11 @@ model EnergyDataset {
   kpis        Json
   createdAt   DateTime @default(now())
 }
+
+/// Scenarios saved from the dashboard or the AI agent (shared by Express and FastAPI)
+model SavedScenario {
+  id      String   @id
+  pvKw    Float
+  kpis    Json
+  savedAt DateTime @default(now())
+}

@@ -16,6 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 from pydantic import BaseModel, StrictFloat, StrictInt
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -146,8 +147,28 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # --- Routes ------------------------------------------------------------------
 
-# In-memory store for saved scenarios (resets on server restart)
-saved_scenarios: list[SavedScenario] = []
+DATABASE_ERROR = "Database error. Check DATABASE_URL and that PostgreSQL is running."
+
+
+def database_error() -> HTTPException:
+    logger.exception("Database error")  # like console.error(err), with traceback
+    # Same message as Express (here the variable is DATABASE_URL_PY)
+    return HTTPException(status_code=500, detail=DATABASE_ERROR)
+
+
+def connect():
+    # connect_timeout=5 is the same as Prisma's default connection timeout
+    return psycopg.connect(DATABASE_URL, connect_timeout=5, row_factory=dict_row)
+
+
+def js_number(value: float) -> JsonNumber:
+    """Postgres DOUBLE PRECISION comes back as float; JS prints 5.0 as 5, so do the same."""
+    return int(value) if value.is_integer() else value
+
+
+def to_js_iso(value: datetime) -> str:
+    """Same format as JS Date.toISOString(): 2025-01-01T12:00:00.000Z"""
+    return value.isoformat(timespec="milliseconds") + "Z"
 
 
 @app.get("/health")
@@ -155,24 +176,55 @@ def health():
     return {"ok": True}
 
 
+# Saved scenarios live in the SavedScenario table, shared with Express (the AI agent
+# saves there too). The two functions below are the only ones that touch it, so tests
+# can replace them without a database.
+
+
+def fetch_scenarios() -> list[SavedScenario]:
+    try:
+        with connect() as conn:
+            rows = conn.execute(
+                'SELECT id, "pvKw", kpis, "savedAt" FROM "SavedScenario" ORDER BY "savedAt" DESC'
+            ).fetchall()
+    except psycopg.Error:
+        raise database_error()
+    return [
+        SavedScenario(
+            id=r["id"], pvKw=js_number(r["pvKw"]), kpis=r["kpis"], savedAt=to_js_iso(r["savedAt"])
+        )
+        for r in rows
+    ]
+
+
+def insert_scenario(id: str, pv_kw: JsonNumber, kpis: Kpis, saved_at: datetime) -> None:
+    try:
+        with connect() as conn:
+            conn.execute(
+                'INSERT INTO "SavedScenario" (id, "pvKw", kpis, "savedAt") VALUES (%s, %s, %s, %s)',
+                (id, pv_kw, Jsonb(kpis.model_dump()), saved_at),
+            )
+    except psycopg.Error:
+        raise database_error()
+
+
 @app.get("/api/energy/scenarios", response_model=list[SavedScenario])
 def list_scenarios():
-    return saved_scenarios
+    return fetch_scenarios()
 
 
 @app.post("/api/energy/scenarios", status_code=201, response_model=SavedScenario)
 def save_scenario(body: NewScenario):
     # Express checks typeof by hand. Here FastAPI has already validated the body
     # against NewScenario; an invalid body never gets here (see the 400 handler).
-    scenario = SavedScenario(
-        id=str(uuid.uuid4()),  # crypto.randomUUID() is a v4 UUID too
-        pvKw=body.pvKw,
-        kpis=body.kpis,
-        # Same format as JS new Date().toISOString(): 2025-01-01T12:00:00.000Z
-        savedAt=datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-    )
-    saved_scenarios.insert(0, scenario)  # insert(0, ...) is JS unshift(): newest first
-    return scenario
+    scenario_id = str(uuid.uuid4())  # crypto.randomUUID() is a v4 UUID too
+    # Prisma stores DateTime as UTC without a time zone, in milliseconds. Cut to
+    # milliseconds here, so the response matches what is read back later.
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    saved_at = now.replace(microsecond=now.microsecond // 1000 * 1000)
+
+    insert_scenario(scenario_id, body.pvKw, body.kpis, saved_at)
+    return SavedScenario(id=scenario_id, pvKw=body.pvKw, kpis=body.kpis, savedAt=to_js_iso(saved_at))
 
 
 def load_dataset() -> dict:
@@ -181,20 +233,14 @@ def load_dataset() -> dict:
     Kept separate from the routes so tests can replace it without a database.
     """
     try:
-        # connect_timeout=5 is the same as Prisma's default connection timeout
-        with psycopg.connect(DATABASE_URL, connect_timeout=5, row_factory=dict_row) as conn:
+        with connect() as conn:
             row = conn.execute(
                 # Quoted names because Prisma created them case-sensitive
                 'SELECT timestamps, baseline, scenario, kpis FROM "EnergyDataset" '
                 'ORDER BY "createdAt" ASC LIMIT 1'
             ).fetchone()
     except psycopg.Error:
-        logger.exception("Database error")  # like console.error(err), with traceback
-        # Same message as Express (here the variable is DATABASE_URL_PY)
-        raise HTTPException(
-            status_code=500,
-            detail="Database error. Check DATABASE_URL and that PostgreSQL is running.",
-        )
+        raise database_error()
 
     # Checked outside the try, so this 404 can't be turned into a 500
     if row is None:

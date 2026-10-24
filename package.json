@@ -4,9 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n web,api -c cyan,magenta \"vite\" \"npm run dev --prefix server\"",
+    "dev": "concurrently -n web,api,api-py -c cyan,magenta,yellow \"vite\" \"npm run dev --prefix server\" \"npm run dev:api-py\"",
     "dev:web": "vite",
     "dev:api": "npm run dev --prefix server",
+    "dev:api-py": "cd server-py && .venv/bin/python -m uvicorn main:app --reload",
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
