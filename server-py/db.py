@@ -11,8 +11,8 @@ from psycopg.rows import dict_row
 # Variables already set in the environment win.
 load_dotenv(Path(__file__).parent / ".env")
 
-# Prisma's DATABASE_URL ends with "?schema=public", which psycopg does not accept,
-# so the Python backend reads its own variable.
+# Named DATABASE_URL_PY because Express (on main) uses DATABASE_URL with a
+# Prisma-only "?schema=public" suffix that psycopg does not accept.
 DATABASE_URL = os.environ.get(
     "DATABASE_URL_PY", "postgresql://postgres:postgres@localhost:5432/energy_dashboard"
 )

@@ -1,8 +1,8 @@
 // Runs the TypeScript calculateScenario (the reference) on the real-week snapshot and saves the
 // results as a fixture for server-py/test_calculations.py.
 //
-// Run from the repo root (uses the tsx that is installed in server/):
-//   server/node_modules/.bin/tsx server-py/tests/generate_parity_fixture.ts
+// Run from the repo root (npx downloads tsx if it is not installed):
+//   npx tsx server-py/tests/generate_parity_fixture.ts
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

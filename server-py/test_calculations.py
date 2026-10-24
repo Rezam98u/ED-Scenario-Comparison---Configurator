@@ -2,7 +2,7 @@
 
 The parity fixture is produced by the TypeScript reference implementation. Regenerate it
 from the repo root with:
-    server/node_modules/.bin/tsx server-py/tests/generate_parity_fixture.ts
+    npx tsx server-py/tests/generate_parity_fixture.ts
 """
 
 import json

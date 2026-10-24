@@ -26,8 +26,8 @@
 - Benefit: **DRY principle** — if function signature changes, assertion automatically updates. No maintenance bug.
 - How it works: TypeScript infers `T = EnergyApiResponse` from `Promise<EnergyApiResponse>` in the return type.
 
-### 3. Runtime Validation Pattern (Backend Best Practice)
-- File: `server/src/routes/energy.ts`
+### 3. Runtime Validation Pattern (Backend Best Practice) — Express, on `main`
+- File: `server/src/routes/energy.ts` (on `main`; this branch validates with Pydantic models in `server-py/main.py` and `agent.py`)
 - Current: Uses `typeof` guards for shallow validation (`typeof pvKw !== 'number'`)
 - Future improvement: Add Zod schema validation for deep object validation.
 - Why: `typeof` only catches top-level type mismatches. Zod validates entire object structure and field shapes.
@@ -35,7 +35,7 @@
 
 ### 4. Type Assertions (`as` and `!`)
 - **Type assertion (`as`)**: Override TypeScript's inference when you have information the compiler doesn't.
-  - File: `server/src/routes/energy.ts:31` — `kpis as Kpis` after validating it's a non-null object.
+  - File (on `main`): `server/src/routes/energy.ts:31` — `kpis as Kpis` after validating it's a non-null object.
   - Safe here because we've proven `kpis` is object-shaped via `typeof` checks.
   - Use only after validation; it's an escape hatch, not a solution.
   
@@ -53,12 +53,13 @@
 - `Kpis` and `SavedScenario` are the only types that cross the API boundary (frontend ↔ backend).
 - They live in `shared/types.ts` (workspace root) — the single source of truth.
 - `src/types/energy.ts` imports and re-exports them for frontend use.
-- `server/src/routes/energy.ts` imports them directly from `../../../shared/types.js` (.js extension required for NodeNext module resolution).
+- On `main`, `server/src/routes/energy.ts` imports them directly from `../../../shared/types.js` (.js extension required for NodeNext module resolution).
+- On this branch, `server-py/store.py` and `main.py` mirror them as Pydantic models (`Kpis`, `SavedScenario`).
 - All other types (UI-only, Prisma/DB) stay in their respective layers and are NOT shared.
 
 ---
 
-## Backend Typing: req.body is always unknown
+## Backend Typing: req.body is always unknown — Express, on `main`
 
 - `req.body` in Express has no compile-time shape guarantee — it's open to the world (curl, Postman, scripts).
 - Always type destructured fields from `req.body` as `unknown` (not the expected type), then validate with `typeof` guards before trusting the data.
@@ -82,7 +83,7 @@
 
 ---
 
-## Server tsconfig rootDir change
+## Server tsconfig rootDir change — Express, on `main`
 
 - `server/tsconfig.json` uses `rootDir: ".."` (workspace root) instead of `"src"` to allow importing from `../shared/`.
 - This changes the compiled output path: `server/src/index.ts` → `server/dist/server/src/index.js`.
@@ -90,7 +91,9 @@
 
 ---
 
-## Backend Architecture: Separation of Concerns
+## Backend Architecture: Separation of Concerns — Express, on `main`
+
+- On this branch: `server-py/main.py` (routes), `store.py` (database), `agent.py` (AI agent), `db.py` (settings).
 
 - `server/src/index.ts` — Infrastructure only: Express setup, CORS, middleware, port, router mounting.
 - `server/src/routes/energy.ts` — Application logic only: route handlers, validation, DB reads/writes.
@@ -101,7 +104,7 @@
 ## Scenario Storage
 
 - Saved scenarios are stored in the PostgreSQL `SavedScenario` table (`fetch_scenarios` / `insert_scenario` / `add_scenario` in `server-py/store.py`, used by the API routes and the AI agent).
-- They survive restarts and are shared by both backends, so scenarios saved by the AI agent appear in the dashboard.
+- They survive restarts and are shared by the API routes and the AI agent, so scenarios saved by the agent appear in the dashboard.
 
 ---
 

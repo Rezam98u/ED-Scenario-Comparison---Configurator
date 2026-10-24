@@ -1,4 +1,4 @@
-// Shared API-boundary types — used by both frontend (src/) and backend (server/src/)
+// API-boundary types used by the frontend (src/); server-py mirrors them as Pydantic models
 
 export interface Kpis {
   total_consumption_kwh: number
