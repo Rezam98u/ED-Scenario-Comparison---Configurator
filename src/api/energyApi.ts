@@ -1,7 +1,9 @@
 
 // API contract and initial Api endpoint
 
-import type { EnergyAnalysis, EnergyApiResponse, Kpis, SavedScenario, ScenarioResult } from '../types/energy'
+import type {
+  DatasetSummary, EnergyAnalysis, EnergyApiResponse, Kpis, SavedScenario, ScenarioResult,
+} from '../types/energy'
 
 const BASE_URL = window.location.origin
 
@@ -25,9 +27,17 @@ async function readErrorMessage(response: Response, fallback: string): Promise<s
   return message || `${fallback}: ${response.status}`
 }
 
+// null = the default dataset (the backend uses the oldest one when no id is given)
+export type DatasetId = string | null
+
+// "?datasetId=..." for a chosen dataset, nothing for the default
+function datasetQuery(datasetId: DatasetId): string {
+  return datasetId === null ? '' : `?datasetId=${encodeURIComponent(datasetId)}`
+}
+
 export const energyApi = {
-  async getEnergyData(): Promise<EnergyApiResponse> {
-    const response = await fetch(`${BASE_URL}/api/energy`)
+  async getEnergyData(datasetId: DatasetId = null): Promise<EnergyApiResponse> {
+    const response = await fetch(`${BASE_URL}/api/energy${datasetQuery(datasetId)}`)
 
     if (!response.ok) {
       throw new Error(await readErrorMessage(response, 'Failed to fetch energy data'))
@@ -38,8 +48,8 @@ export const energyApi = {
   },
 
   // Scenario calculation runs in the FastAPI backend (server-py/calculations.py)
-  async calculateScenario(pvKw: number): Promise<ScenarioResult> {
-    const response = await fetch(`${BASE_URL}/api/energy/calculate`, {
+  async calculateScenario(pvKw: number, datasetId: DatasetId = null): Promise<ScenarioResult> {
+    const response = await fetch(`${BASE_URL}/api/energy/calculate${datasetQuery(datasetId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pvKw }),
@@ -54,14 +64,40 @@ export const energyApi = {
   },
 
   // Daily self-sufficiency, average daily profile and peak hours (pandas, server-py/analysis.py)
-  async getAnalysis(): Promise<EnergyAnalysis> {
-    const response = await fetch(`${BASE_URL}/api/energy/analysis`)
+  async getAnalysis(datasetId: DatasetId = null): Promise<EnergyAnalysis> {
+    const response = await fetch(`${BASE_URL}/api/energy/analysis${datasetQuery(datasetId)}`)
 
     if (!response.ok) {
       throw new Error(await readErrorMessage(response, 'Failed to fetch analysis'))
     }
 
     // Type automatically inferred from the function's return type signature
+    return parseJsonResponse(response)
+  },
+
+  // Imported periods, oldest first; the first one is the default
+  async getDatasets(): Promise<DatasetSummary[]> {
+    const response = await fetch(`${BASE_URL}/api/energy/datasets`)
+
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, 'Failed to fetch periods'))
+    }
+
+    return parseJsonResponse(response)
+  },
+
+  // Imports a period from Open-Meteo, or returns it if it was imported before
+  async importDataset(start: string, end: string): Promise<DatasetSummary> {
+    const response = await fetch(`${BASE_URL}/api/energy/datasets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start, end }),
+    })
+
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, 'Failed to load period'))
+    }
+
     return parseJsonResponse(response)
   },
 

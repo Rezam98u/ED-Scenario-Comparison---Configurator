@@ -28,6 +28,7 @@ Switch branches with `git switch <branch>`, then reinstall dependencies: `npm in
 
 - **Time-series chart** — hourly baseline vs. scenario comparison for consumption and PV generation over a 7-day window, with a brush/zoom control
 - **KPI cards** — live-recalculated total consumption (kWh), PV coverage (%), and CO₂ savings (t)
+- **Period picker** — switch between imported periods, or load a new one (up to 31 days) from real weather data; the chosen period is kept in the URL (`?dataset=<id>`)
 - **PV Configuration** — slider + numeric input (0–100 kW) to adjust PV capacity; changes are applied on demand
 - **Analysis** — daily autarky and the average hourly profile (pandas)
 - **Save scenarios** — persisted in PostgreSQL (`SavedScenario` table, survives restarts); optimistic UI updates
@@ -232,7 +233,8 @@ Each imported period is one row in `EnergyDataset`, identified by its dates plus
 - `POST /api/energy/datasets` with `{ "start": "2026-10-01", "end": "2026-10-07" }` imports that week with the default settings (Düsseldorf, 10 kWp, …). It returns the dataset summary: `201` when it was imported now, `200` when it already existed (no new Open-Meteo call).
 - Limits: `end` not before `start`, at most 31 days, and data only up to yesterday (UTC).
 - `GET /api/energy/datasets` returns `[{ id, label, start, end, params, createdAt }]`, oldest first. The first entry is the default that the dashboard shows.
-- The dashboard and the AI agent still use the default dataset; choosing a period in the UI comes next.
+- The dashboard's **Period** card lists the periods (default first, then by date) and loads new ones through `POST /api/energy/datasets`. The chosen period is kept in the URL as `?dataset=<id>` and shown in a banner with "Back to default"; the KPIs, chart, scenario and analysis all follow it.
+- The AI agent still uses the default dataset, and saved scenarios are not yet linked to a period.
 
 ---
 

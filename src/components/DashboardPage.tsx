@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { TimeSeriesChart } from './TimeSeriesChart'
 import { KpiCards } from './KpiCards'
@@ -8,8 +8,11 @@ import { ErrorState } from './ErrorState'
 import { ErrorBoundary } from './ErrorBoundary'
 import { AnalysisSection } from './AnalysisSection'
 import { ChatPanel } from './ChatPanel'
-import { energyApi } from '../api/energyApi'
-import type { EnergyApiResponse, ChartDataPoint, Kpis, SavedScenario, ScenarioResult } from '../types/energy'
+import { PeriodPicker, formatPeriod } from './PeriodPicker'
+import { energyApi, type DatasetId } from '../api/energyApi'
+import type {
+  DatasetSummary, EnergyApiResponse, ChartDataPoint, Kpis, SavedScenario, ScenarioResult,
+} from '../types/energy'
 
 
 // ─── Small local components ──────────────────────────────────────────────────
@@ -81,26 +84,71 @@ function SavedScenariosList({ scenarios }: { scenarios: SavedScenario[] }) {
   )
 }
 
+function PeriodBanner({ dataset, onReset }: { dataset: DatasetSummary; onReset: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+      <span>
+        Showing <strong>{formatPeriod(dataset.start, dataset.end)}</strong> (not the default period)
+      </span>
+      <button onClick={onReset} className="font-medium text-blue-700 hover:underline">
+        Back to default
+      </button>
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
+
+// The chosen period is kept in the URL (?dataset=<id>), so a reload or a shared
+// link shows the same period. No parameter = the default period.
+function readDatasetFromUrl(): DatasetId {
+  return new URLSearchParams(window.location.search).get('dataset')
+}
+
+function writeDatasetToUrl(datasetId: DatasetId) {
+  const url = new URL(window.location.href)
+  if (datasetId === null) url.searchParams.delete('dataset')
+  else url.searchParams.set('dataset', datasetId)
+  window.history.replaceState(null, '', url)
+}
 
 export function DashboardPage() {
   const [currentPvKw, setCurrentPvKw] = useState(10)
+  const [datasetId, setDatasetId] = useState<DatasetId>(readDatasetFromUrl)
+
+  useEffect(() => { writeDatasetToUrl(datasetId) }, [datasetId])
+
+  const { data: datasets } = useQuery<DatasetSummary[]>({
+    queryKey: ['datasets'],
+    queryFn: () => energyApi.getDatasets(),
+  })
+
+  // A period from an old link may no longer exist: fall back to the default
+  useEffect(() => {
+    if (datasets && datasetId !== null && !datasets.some((d) => d.id === datasetId)) {
+      setDatasetId(null)
+    }
+  }, [datasets, datasetId])
 
   const { data, isLoading, error, refetch } = useQuery<EnergyApiResponse>({
-    queryKey: ['energy-data'],
-    queryFn: () => energyApi.getEnergyData(),
+    queryKey: ['energy-data', datasetId],
+    queryFn: () => energyApi.getEnergyData(datasetId),
   })
 
   // The scenario is calculated by the backend (POST /api/energy/calculate).
   // pvKw is part of the query key, so each value is cached: going back to a pvKw
   // that was already calculated needs no new request.
   const scenarioQuery = useQuery<ScenarioResult>({
-    queryKey: ['scenario', currentPvKw],
-    queryFn: () => energyApi.calculateScenario(currentPvKw),
-    // While a new pvKw is calculated, keep showing the previous result
-    // instead of the full-page skeleton
-    placeholderData: keepPreviousData,
+    queryKey: ['scenario', datasetId, currentPvKw],
+    queryFn: () => energyApi.calculateScenario(currentPvKw, datasetId),
+    // While a new pvKw is calculated, keep showing the previous result instead of
+    // the full-page skeleton. Only within the same period: another period has
+    // other timestamps, so its old scenario must not be shown.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === datasetId ? keepPreviousData(previous) : undefined,
   })
+
+  const selectedDataset = datasetId === null ? null : datasets?.find((d) => d.id === datasetId) ?? null
 
   const currentScenario = scenarioQuery.data?.scenario ?? null
   const currentKpis = scenarioQuery.data?.kpis ?? null
@@ -217,6 +265,9 @@ export function DashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3 space-y-6">
+            {selectedDataset && (
+              <PeriodBanner dataset={selectedDataset} onReset={() => setDatasetId(null)} />
+            )}
             <ErrorBoundary>
               <KpiCards kpis={currentKpis} />
             </ErrorBoundary>
@@ -226,6 +277,12 @@ export function DashboardPage() {
           </div>
 
           <div className="lg:col-span-1 space-y-4">
+
+            {datasets && datasets.length > 0 && (
+              <ErrorBoundary>
+                <PeriodPicker datasets={datasets} selectedId={datasetId} onSelect={setDatasetId} />
+              </ErrorBoundary>
+            )}
 
             <ErrorBoundary>
               <PvConfigurator currentPvKw={currentPvKw} onApply={handlePvConfigApply} />
@@ -249,7 +306,7 @@ export function DashboardPage() {
         </div>
 
         <ErrorBoundary>
-          <AnalysisSection />
+          <AnalysisSection datasetId={datasetId} />
         </ErrorBoundary>
       </div>
     </div>

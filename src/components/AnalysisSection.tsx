@@ -12,7 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import { energyApi } from '../api/energyApi'
+import { energyApi, type DatasetId } from '../api/energyApi'
 import { ChartSkeleton } from './LoadingSkeleton'
 import { ErrorState } from './ErrorState'
 import type { EnergyAnalysis } from '../types/energy'
@@ -48,10 +48,10 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle: str
   )
 }
 
-export function AnalysisSection() {
+export function AnalysisSection({ datasetId }: { datasetId: DatasetId }) {
   const { data, isLoading, error, refetch } = useQuery<EnergyAnalysis>({
-    queryKey: ['energy-analysis'],
-    queryFn: () => energyApi.getAnalysis(),
+    queryKey: ['energy-analysis', datasetId],
+    queryFn: () => energyApi.getAnalysis(datasetId),
   })
 
   return (

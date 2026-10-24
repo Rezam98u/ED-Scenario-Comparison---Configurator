@@ -53,3 +53,13 @@ export interface EnergyAnalysis {
   peakConsumptionHour: number | null // null only when the dataset has no hours
   peakPvHour: number | null
 }
+
+// GET /api/energy/datasets: one imported period, without its hourly values
+export interface DatasetSummary {
+  id: string
+  label: string
+  start: string // YYYY-MM-DD (UTC day, inclusive)
+  end: string
+  params: Record<string, number> | null // import settings (location, kWp, ...)
+  createdAt: string
+}
