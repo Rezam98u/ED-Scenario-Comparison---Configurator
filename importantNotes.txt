@@ -100,7 +100,7 @@
 
 ## Scenario Storage
 
-- Saved scenarios are stored in the PostgreSQL `SavedScenario` table (`server/src/agent/scenarioStore.ts` for Express and the agent, `fetch_scenarios` / `insert_scenario` in `server-py/main.py` for FastAPI).
+- Saved scenarios are stored in the PostgreSQL `SavedScenario` table (`fetch_scenarios` / `insert_scenario` / `add_scenario` in `server-py/store.py`, used by the API routes and the AI agent).
 - They survive restarts and are shared by both backends, so scenarios saved by the AI agent appear in the dashboard.
 
 ---

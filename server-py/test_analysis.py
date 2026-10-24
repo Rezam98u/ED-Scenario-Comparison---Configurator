@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+import store
 from analysis import analyze_baseline
 
 client = TestClient(main.app)
@@ -99,7 +100,7 @@ def test_peak_tie_returns_earliest_hour():
 
 def test_analysis_endpoint(monkeypatch):
     # Replace load_dataset so this test does not need a database
-    monkeypatch.setattr(main, "load_dataset", lambda: TWO_DAYS)
+    monkeypatch.setattr(store, "load_dataset", lambda: TWO_DAYS)
 
     response = client.get("/api/energy/analysis")
     assert response.status_code == 200
@@ -117,7 +118,7 @@ def test_analysis_database_error_returns_500(monkeypatch):
     def broken_connect(*args, **kwargs):
         raise psycopg.OperationalError("connection refused")
 
-    monkeypatch.setattr(main.psycopg, "connect", broken_connect)
+    monkeypatch.setattr(psycopg, "connect", broken_connect)
     response = client.get("/api/energy/analysis")
     assert response.status_code == 500
     assert response.json() == {
@@ -129,7 +130,7 @@ def test_analysis_no_data_returns_404(monkeypatch):
     def no_data():
         raise main.HTTPException(status_code=404, detail="No energy data. Run migrations and seed.")
 
-    monkeypatch.setattr(main, "load_dataset", no_data)
+    monkeypatch.setattr(store, "load_dataset", no_data)
     response = client.get("/api/energy/analysis")
     assert response.status_code == 404
     assert response.json() == {"error": "No energy data. Run migrations and seed."}

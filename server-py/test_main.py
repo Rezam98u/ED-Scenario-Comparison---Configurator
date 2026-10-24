@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+import store
 
 client = TestClient(main.app)
 
@@ -16,16 +17,16 @@ INVALID_BODY_ERROR = {"error": "pvKw (number) and kpis (object) are required"}
 
 
 @pytest.fixture
-def store(monkeypatch):
+def fake_table(monkeypatch):
     """Replace the SavedScenario table with a list, so these tests do not need a database."""
     rows = []
 
     def insert_scenario(id, pv_kw, kpis, saved_at):
-        saved = main.SavedScenario(id=id, pvKw=pv_kw, kpis=kpis, savedAt=main.to_js_iso(saved_at))
+        saved = store.SavedScenario(id=id, pvKw=pv_kw, kpis=kpis, savedAt=store.to_js_iso(saved_at))
         rows.insert(0, saved)  # newest first, like ORDER BY "savedAt" DESC
 
-    monkeypatch.setattr(main, "insert_scenario", insert_scenario)
-    monkeypatch.setattr(main, "fetch_scenarios", lambda: list(rows))
+    monkeypatch.setattr(store, "insert_scenario", insert_scenario)
+    monkeypatch.setattr(store, "fetch_scenarios", lambda: list(rows))
     return rows
 
 
@@ -35,7 +36,7 @@ def broken_database(monkeypatch):
         raise psycopg.OperationalError("connection refused")
 
     # Replace psycopg.connect so these tests do not need a running database
-    monkeypatch.setattr(main.psycopg, "connect", broken_connect)
+    monkeypatch.setattr(psycopg, "connect", broken_connect)
 
 
 def test_health():
@@ -44,7 +45,7 @@ def test_health():
     assert response.json() == {"ok": True}
 
 
-def test_save_and_list_scenarios(store):
+def test_save_and_list_scenarios(fake_table):
     first = client.post("/api/energy/scenarios", json={"pvKw": 5, "kpis": VALID_KPIS})
     assert first.status_code == 201
     assert '"pvKw":5,' in first.text  # 5 stays 5, not 5.0 (same as Express)
@@ -73,14 +74,14 @@ def test_save_and_list_scenarios(store):
         {"pvKw": 5, "kpis": {"pv_coverage_pct": 7.6}},  # kpis incomplete
     ],
 )
-def test_invalid_body_returns_400(store, body):
+def test_invalid_body_returns_400(fake_table, body):
     response = client.post("/api/energy/scenarios", json=body)
     assert response.status_code == 400
     assert response.json() == INVALID_BODY_ERROR  # { error }, never { detail }
-    assert store == []
+    assert fake_table == []
 
 
-def test_malformed_json_returns_400(store):
+def test_malformed_json_returns_400(fake_table):
     response = client.post(
         "/api/energy/scenarios",
         content="{not json",
@@ -99,24 +100,24 @@ def test_unknown_route_uses_error_shape():
 def test_energy_database_error_returns_500(broken_database):
     response = client.get("/api/energy")
     assert response.status_code == 500
-    assert response.json() == {"error": main.DATABASE_ERROR}
+    assert response.json() == {"error": store.DATABASE_ERROR}
 
 
 def test_list_scenarios_database_error_returns_500(broken_database):
     response = client.get("/api/energy/scenarios")
     assert response.status_code == 500
-    assert response.json() == {"error": main.DATABASE_ERROR}
+    assert response.json() == {"error": store.DATABASE_ERROR}
 
 
 def test_save_scenario_database_error_returns_500(broken_database):
     response = client.post("/api/energy/scenarios", json={"pvKw": 5, "kpis": VALID_KPIS})
     assert response.status_code == 500
-    assert response.json() == {"error": main.DATABASE_ERROR}
+    assert response.json() == {"error": store.DATABASE_ERROR}
 
 
 @pytest.mark.parametrize("value, expected", [(5.0, 5), (12.5, 12.5), (0.0, 0)])
 def test_js_number_prints_whole_floats_like_js(value, expected):
-    result = main.js_number(value)
+    result = store.js_number(value)
     assert result == expected and type(result) is type(expected)
 
 
@@ -136,7 +137,7 @@ def test_energy_empty_table_returns_404(monkeypatch):
         def fetchone(self):
             return None
 
-    monkeypatch.setattr(main.psycopg, "connect", lambda *args, **kwargs: EmptyTableConnection())
+    monkeypatch.setattr(psycopg, "connect", lambda *args, **kwargs: EmptyTableConnection())
 
     response = client.get("/api/energy")
     assert response.status_code == 404
@@ -157,7 +158,7 @@ SMALL_DATASET = {
 @pytest.fixture
 def fake_dataset(monkeypatch):
     # Replace load_dataset so the endpoint tests do not need a database
-    monkeypatch.setattr(main, "load_dataset", lambda: SMALL_DATASET)
+    monkeypatch.setattr(store, "load_dataset", lambda: SMALL_DATASET)
 
 
 def test_calculate_returns_scenario_and_kpis(fake_dataset):
@@ -180,7 +181,7 @@ def test_calculate_negative_pv_returns_400(monkeypatch):
     def must_not_be_called():
         raise AssertionError("load_dataset should not be called")
 
-    monkeypatch.setattr(main, "load_dataset", must_not_be_called)
+    monkeypatch.setattr(store, "load_dataset", must_not_be_called)
     response = client.post("/api/energy/calculate", json={"pvKw": -1})
     assert response.status_code == 400
     assert response.json() == {"error": "PV capacity cannot be negative"}
@@ -210,7 +211,7 @@ def test_calculate_malformed_or_non_finite_returns_400(fake_dataset, content):
     assert response.json() == CALCULATE_INVALID_BODY_ERROR
 
 
-def test_scenarios_keeps_its_own_validation_message(store):
+def test_scenarios_keeps_its_own_validation_message(fake_table):
     response = client.post("/api/energy/scenarios", json={})
     assert response.json() == INVALID_BODY_ERROR
 
@@ -218,14 +219,14 @@ def test_scenarios_keeps_its_own_validation_message(store):
 def test_calculate_database_error_returns_500(broken_database):
     response = client.post("/api/energy/calculate", json={"pvKw": 10})
     assert response.status_code == 500
-    assert response.json() == {"error": main.DATABASE_ERROR}
+    assert response.json() == {"error": store.DATABASE_ERROR}
 
 
 def test_calculate_no_data_returns_404(monkeypatch):
     def no_data():
         raise main.HTTPException(status_code=404, detail="No energy data. Run migrations and seed.")
 
-    monkeypatch.setattr(main, "load_dataset", no_data)
+    monkeypatch.setattr(store, "load_dataset", no_data)
     response = client.post("/api/energy/calculate", json={"pvKw": 10})
     assert response.status_code == 404
     assert response.json() == {"error": "No energy data. Run migrations and seed."}
