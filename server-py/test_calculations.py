@@ -1,8 +1,9 @@
 """Tests for calculations.py. Run from server-py/:  pytest
 
-The parity fixture is produced by the TypeScript reference implementation. Regenerate it
-from the repo root with:
-    npx tsx server-py/tests/generate_parity_fixture.ts
+tests/fixtures/scenario_parity.json is a frozen regression fixture: the results of the
+former TypeScript calculation (src/utils/calculateScenario.ts, still on main) for the
+real week. Python must keep returning exactly these numbers. If the calculation is
+changed on purpose, rewrite the fixture from Python's new results and review the diff.
 """
 
 import json
@@ -19,7 +20,7 @@ PARITY_CASES = json.loads((HERE / "tests/fixtures/scenario_parity.json").read_te
 
 
 @pytest.mark.parametrize("case", PARITY_CASES, ids=lambda c: f"pvKw={c['pvKw']}")
-def test_matches_typescript_exactly(case):
+def test_matches_the_frozen_typescript_results(case):
     result = calculate_scenario(REAL_WEEK["baseline"], case["pvKw"])
     # == on floats is an exact comparison, so this fails on any difference in the last bit
     assert result == case["result"]
@@ -55,3 +56,57 @@ def test_negative_pv_raises():
 def test_zero_consumption_gives_zero_coverage():
     result = calculate_scenario({"consumption": [0, 0], "pv_generation": [0, 0]}, 10)
     assert result["kpis"]["pv_coverage_pct"] == 0
+
+
+# --- Behaviour (ported from the former src/utils/calculateScenario.test.ts) ---
+
+BASELINE_WITH_PV = {"consumption": [100, 200, 150], "pv_generation": [10, 20, 5]}
+BASELINE_ZERO_PV = {"consumption": [100, 200, 150], "pv_generation": [0, 0, 0]}
+
+
+def test_zero_pv_leaves_the_baseline_unchanged():
+    result = calculate_scenario(BASELINE_WITH_PV, 0)
+    assert result["scenario"] == BASELINE_WITH_PV
+    assert result["kpis"]["co2_savings_ton"] == 0
+
+
+def test_more_pv_raises_generation_and_lowers_consumption():
+    scenario = calculate_scenario(BASELINE_WITH_PV, 10)["scenario"]
+    for new, base in zip(scenario["pv_generation"], BASELINE_WITH_PV["pv_generation"]):
+        assert new >= base
+    for new, base in zip(scenario["consumption"], BASELINE_WITH_PV["consumption"]):
+        assert new <= base
+
+
+def test_consumption_never_drops_below_20_percent_of_baseline():
+    scenario = calculate_scenario(BASELINE_WITH_PV, 9999)["scenario"]
+    for new, base in zip(scenario["consumption"], BASELINE_WITH_PV["consumption"]):
+        assert new >= base * 0.2 - 0.0001  # tiny float tolerance
+
+
+def test_larger_pv_gives_at_least_as_much_generation():
+    small = calculate_scenario(BASELINE_WITH_PV, 5)["scenario"]["pv_generation"]
+    large = calculate_scenario(BASELINE_WITH_PV, 10)["scenario"]["pv_generation"]
+    assert all(l >= s for s, l in zip(small, large))
+
+
+def test_kpis_are_complete_and_non_negative_with_pv():
+    kpis = calculate_scenario(BASELINE_WITH_PV, 5)["kpis"]
+    assert set(kpis) == {"total_consumption_kwh", "pv_coverage_pct", "co2_savings_ton"}
+    assert kpis["pv_coverage_pct"] >= 0
+    assert kpis["co2_savings_ton"] >= 0
+
+
+def test_hours_without_sun_get_the_fallback_generation():
+    # base PV 0 → additional_pv_per_hour * 0.1
+    scenario = calculate_scenario(BASELINE_ZERO_PV, 10)["scenario"]
+    assert all(v > 0 for v in scenario["pv_generation"])
+
+
+@pytest.mark.parametrize(
+    "baseline", [BASELINE_WITH_PV, {"consumption": [200], "pv_generation": [10]}]
+)
+def test_output_has_the_same_length_as_the_baseline(baseline):
+    scenario = calculate_scenario(baseline, 5)["scenario"]
+    assert len(scenario["consumption"]) == len(baseline["consumption"])
+    assert len(scenario["pv_generation"]) == len(baseline["pv_generation"])

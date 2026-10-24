@@ -77,14 +77,13 @@ Switch branches with `git switch <branch>`, then reinstall dependencies: `npm in
 │   ├── alembic.ini               # Alembic configuration
 │   ├── migrations/               # Alembic migrations (database tables)
 │   ├── test_*.py                 # pytest tests
-│   ├── tests/                    # real-week snapshot, parity fixture + the script that generates it
+│   ├── tests/fixtures/           # real-week snapshot + frozen calculation results
 │   └── requirements.txt
 ├── src/
 │   ├── api/                      # energyApi.ts, chatApi.ts
 │   ├── components/
 │   ├── hooks/
-│   ├── types/energy.ts
-│   └── utils/calculateScenario.ts
+│   └── types/energy.ts
 ├── docker-compose.yml            # PostgreSQL
 └── vite.config.ts                # Dev proxy: /api → FastAPI
 ```
@@ -225,13 +224,9 @@ Errors are always JSON with an `error` message (the frontend reads `body.error`,
 
 Both endpoints read the baseline from the database (same `404`/`500` errors as `GET /api/energy`). The logic lives in pure functions without FastAPI code, so it can be tested on its own.
 
-**`POST /api/energy/calculate`** — `server-py/calculations.py`, an exact port of `src/utils/calculateScenario.ts`, including JS `Math.round` rounding (Python's `round()` rounds halves to even). The frontend calls it with TanStack Query, cached per `pvKw`.
+**`POST /api/energy/calculate`** — `server-py/calculations.py`, an exact port of the TypeScript `calculateScenario` from `main`, including JS `Math.round` rounding (Python's `round()` rounds halves to even). It is the only copy of the calculation on this branch; the frontend calls it with TanStack Query, cached per `pvKw`.
 
-`test_calculations.py` checks that Python returns exactly the same numbers as the TypeScript function for pvKw 0, 5, 10, 33.3 and 100. To regenerate the fixture, run from the repo root:
-
-```bash
-npx tsx server-py/tests/generate_parity_fixture.ts
-```
+`test_calculations.py` checks it against a **frozen fixture** (`tests/fixtures/scenario_parity.json`): the TypeScript results for pvKw 0, 5, 10, 33.3 and 100 on the real week, which Python must match exactly. If you change the calculation on purpose, rewrite the fixture from Python's new results and review the diff.
 
 **`GET /api/energy/analysis`** — pandas analysis of the baseline (`server-py/analysis.py`), shown in the "Analyse" section of the dashboard:
 

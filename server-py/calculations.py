@@ -1,8 +1,8 @@
-"""Scenario calculation: an exact port of src/utils/calculateScenario.ts.
+"""Scenario calculation: an exact port of src/utils/calculateScenario.ts (on main).
 
-Pure functions only (no FastAPI, no database), so they are easy to test.
-The TypeScript version stays in the frontend as the reference for the parity test
-(test_calculations.py).
+Pure functions only (no FastAPI, no database), so they are easy to test. This is the
+only copy on this branch; test_calculations.py checks it against the frozen results of
+the TypeScript version.
 """
 
 import math
