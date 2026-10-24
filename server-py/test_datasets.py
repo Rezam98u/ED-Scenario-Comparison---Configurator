@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
+import agent
 import import_open_meteo as imp
 import main
 import store
@@ -182,3 +183,63 @@ def test_import_period_stores_a_new_dataset(monkeypatch):
     assert (row["rangeStart"], row["rangeEnd"]) == (date(2026, 10, 1), date(2026, 10, 1))
     assert row["params"] == imp.dataset_params(imp.DEFAULTS)
     assert len(row["timestamps"]) == 24
+
+
+# --- saved scenarios belong to a period --------------------------------------
+
+KPIS = {"total_consumption_kwh": 30, "pv_coverage_pct": 13.3, "co2_savings_ton": 0}
+
+
+@pytest.fixture
+def linked_ids(monkeypatch):
+    """Fake insert_scenario that records which dataset each scenario was saved for."""
+    ids = []
+
+    def insert_scenario(id, pv_kw, kpis, saved_at, dataset_id):
+        ids.append(dataset_id)
+        return dataset_id or "default"
+
+    monkeypatch.setattr(store, "insert_scenario", insert_scenario)
+    return ids
+
+
+def test_save_scenario_for_a_period(linked_ids):
+    response = client.post("/api/energy/scenarios?datasetId=oct", json={"pvKw": 10, "kpis": KPIS})
+    assert response.status_code == 201
+    assert response.json()["datasetId"] == "oct"
+
+    default = client.post("/api/energy/scenarios", json={"pvKw": 10, "kpis": KPIS})
+    assert default.json()["datasetId"] == "default"  # linked to the default dataset
+    assert linked_ids == ["oct", None]
+
+
+@pytest.mark.parametrize(
+    "query, message", [("?datasetId=nope", "Dataset not found."), ("", store.NO_DATA_ERROR)]
+)
+def test_save_scenario_without_a_matching_dataset_returns_404(monkeypatch, query, message):
+    class NoRowConnection:
+        """The INSERT ... SELECT found no dataset, so nothing was inserted."""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return False
+
+        def execute(self, query, params=None):
+            return self
+
+        def fetchone(self):
+            return None
+
+    monkeypatch.setattr(store, "connect", lambda: NoRowConnection())
+    response = client.post(f"/api/energy/scenarios{query}", json={"pvKw": 10, "kpis": KPIS})
+    assert response.status_code == 404
+    assert response.json() == {"error": message}
+
+
+def test_agent_saves_for_the_period_it_works_on(linked_ids, monkeypatch):
+    monkeypatch.setattr(store, "load_dataset", lambda dataset_id=None: DATASET)
+    turn = agent.Turn(today=date(2026, 10, 24), dataset_id="oct")
+    saved = agent.save_scenario({"pvKw": 5}, turn)
+    assert saved["datasetId"] == "oct" and linked_ids == ["oct"]

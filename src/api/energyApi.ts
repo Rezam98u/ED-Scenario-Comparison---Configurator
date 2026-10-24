@@ -109,8 +109,9 @@ export const energyApi = {
     return parseJsonResponse(response)
   },
 
-  async saveScenario(pvKw: number, kpis: Kpis): Promise<SavedScenario> {
-    const response = await fetch(`${BASE_URL}/api/energy/scenarios`, {
+  // The KPIs belong to the period they were calculated for
+  async saveScenario(pvKw: number, kpis: Kpis, datasetId: DatasetId = null): Promise<SavedScenario> {
+    const response = await fetch(`${BASE_URL}/api/energy/scenarios${datasetQuery(datasetId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pvKw, kpis }),

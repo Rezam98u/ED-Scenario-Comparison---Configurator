@@ -14,16 +14,26 @@ interface UseChatResult {
   error: Error | null
 }
 
-export function useChat(): UseChatResult {
+interface UseChatOptions {
+  datasetId: string | null // the period the dashboard shows; the agent works on it
+  onShowDataset: (datasetId: string) => void // the agent loaded a period: show it
+}
+
+export function useChat({ datasetId, onShowDataset }: UseChatOptions): UseChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
-    mutationFn: (next: ChatMessage[]) => chatApi.sendMessages(next),
-    onSuccess: (updated) => {
-      setMessages(updated)
+    mutationFn: (next: ChatMessage[]) => chatApi.sendMessages(next, datasetId),
+    onSuccess: async (response) => {
+      setMessages(response.messages)
       // Chat can save scenarios via tool call — keep the dashboard list in sync
       queryClient.invalidateQueries({ queryKey: ['saved-scenarios'] })
+      if (response.showDatasetId) {
+        // Refetch the period list first, so the dashboard knows the new period
+        await queryClient.invalidateQueries({ queryKey: ['datasets'] })
+        onShowDataset(response.showDatasetId)
+      }
     },
   })
 

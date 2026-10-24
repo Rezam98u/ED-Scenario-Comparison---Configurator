@@ -214,6 +214,24 @@ def import_period(opts: dict) -> tuple:
     return store.insert_dataset(build_dataset(opts)), True
 
 
+MAX_PERIOD_DAYS = 31  # longer periods make the hourly chart unreadable
+
+
+def load_period(start: date, end: date, today: date) -> tuple:
+    """Import a period requested from the dashboard or the AI agent, with the default
+    settings: (dataset summary, created). Unlike the command line, these periods are
+    limited. Raises ValueError (a message for the user) or RuntimeError (Open-Meteo).
+    """
+    yesterday = today - timedelta(days=1)
+    if end < start:
+        raise ValueError("end must not be before start")
+    if (end - start).days + 1 > MAX_PERIOD_DAYS:
+        raise ValueError(f"A dataset can cover at most {MAX_PERIOD_DAYS} days")
+    if end > yesterday:
+        raise ValueError(f"Data is only available up to yesterday ({yesterday})")
+    return import_period({**DEFAULTS, "start": start.isoformat(), "end": end.isoformat()})
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     for name, default in DEFAULTS.items():

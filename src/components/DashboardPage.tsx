@@ -56,8 +56,19 @@ function SaveScenarioCard({ pvKw, kpis, isPending, isError, isSuccess, onSave }:
   )
 }
 
-function SavedScenariosList({ scenarios }: { scenarios: SavedScenario[] }) {
+interface SavedScenariosListProps {
+  scenarios: SavedScenario[]
+  datasets: DatasetSummary[]
+}
+
+// All saved scenarios, each with its period: the same kW gives other results in another week
+export function SavedScenariosList({ scenarios, datasets }: SavedScenariosListProps) {
   if (scenarios.length === 0) return null
+
+  const periodOf = (datasetId: string) => {
+    const dataset = datasets.find((d) => d.id === datasetId)
+    return dataset ? formatPeriod(dataset.start, dataset.end) : null
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6">
@@ -73,7 +84,12 @@ function SavedScenariosList({ scenarios }: { scenarios: SavedScenario[] }) {
               : 'border-gray-200 bg-gray-50'
               }`}
           >
-            <div className="font-medium text-gray-800">{s.pvKw} kW</div>
+            <div className="font-medium text-gray-800">
+              {s.pvKw} kW
+              {periodOf(s.datasetId) && (
+                <span className="font-normal text-gray-500"> · {periodOf(s.datasetId)}</span>
+              )}
+            </div>
             <div className="text-gray-500 text-xs mt-1">
               Coverage: {s.kpis.pv_coverage_pct}% · CO₂: {s.kpis.co2_savings_ton} t
             </div>
@@ -150,6 +166,12 @@ export function DashboardPage() {
 
   const selectedDataset = datasetId === null ? null : datasets?.find((d) => d.id === datasetId) ?? null
 
+  // The first (oldest) period is the default, which is shown without an id
+  const defaultDatasetId = datasets?.[0]?.id
+  const showDataset = useCallback((id: string) => {
+    setDatasetId(id === defaultDatasetId ? null : id)
+  }, [defaultDatasetId])
+
   const currentScenario = scenarioQuery.data?.scenario ?? null
   const currentKpis = scenarioQuery.data?.kpis ?? null
   // Placeholder KPIs belong to the previous pvKw, so they must not be saved with the new one
@@ -165,7 +187,7 @@ export function DashboardPage() {
   // as we checked savableKpis and Save button is disabled when kpis is null (line 41)
   // so we can use ! (Assertion) to tell TS that it's not null (skip)
   const saveScenarioMutation = useMutation({
-    mutationFn: () => energyApi.saveScenario(currentPvKw, savableKpis!),
+    mutationFn: () => energyApi.saveScenario(currentPvKw, savableKpis!, datasetId),
 
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ['saved-scenarios'] })
@@ -176,6 +198,7 @@ export function DashboardPage() {
         pvKw: currentPvKw,
         kpis: savableKpis!,
         savedAt: new Date().toISOString(),
+        datasetId: datasetId ?? defaultDatasetId ?? '',
       }
       queryClient.setQueryData<SavedScenario[]>(
         ['saved-scenarios'],
@@ -297,10 +320,10 @@ export function DashboardPage() {
               onSave={() => saveScenarioMutation.mutate()}
             />
 
-            <SavedScenariosList scenarios={savedScenarios} />
+            <SavedScenariosList scenarios={savedScenarios} datasets={datasets ?? []} />
 
             <ErrorBoundary>
-              <ChatPanel />
+              <ChatPanel datasetId={datasetId} onShowDataset={showDataset} />
             </ErrorBoundary>
           </div>
         </div>

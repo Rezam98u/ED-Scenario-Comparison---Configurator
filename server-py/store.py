@@ -36,6 +36,7 @@ class SavedScenario(BaseModel):
     pvKw: JsonNumber
     kpis: Kpis
     savedAt: str
+    datasetId: str  # the period the KPIs were calculated for
 
 
 # --- Helpers -----------------------------------------------------------------
@@ -170,35 +171,53 @@ def fetch_scenarios() -> list[SavedScenario]:
     try:
         with connect() as conn:
             rows = conn.execute(
-                'SELECT id, "pvKw", kpis, "savedAt" FROM "SavedScenario" ORDER BY "savedAt" DESC'
+                'SELECT id, "pvKw", kpis, "savedAt", "datasetId" FROM "SavedScenario" '
+                'ORDER BY "savedAt" DESC'
             ).fetchall()
     except psycopg.Error:
         raise database_error()
     return [
         SavedScenario(
-            id=r["id"], pvKw=js_number(r["pvKw"]), kpis=r["kpis"], savedAt=to_js_iso(r["savedAt"])
+            id=r["id"], pvKw=js_number(r["pvKw"]), kpis=r["kpis"],
+            savedAt=to_js_iso(r["savedAt"]), datasetId=r["datasetId"],
         )
         for r in rows
     ]
 
 
-def insert_scenario(id: str, pv_kw: JsonNumber, kpis: Kpis, saved_at: datetime) -> None:
+def insert_scenario(
+    id: str, pv_kw: JsonNumber, kpis: Kpis, saved_at: datetime, dataset_id: Optional[str]
+) -> str:
+    """Insert a scenario for the given dataset (None = the default one) and return the
+    dataset id it was linked to. Raises HTTPException 404 for an unknown dataset id."""
     try:
         with connect() as conn:
-            conn.execute(
-                'INSERT INTO "SavedScenario" (id, "pvKw", kpis, "savedAt") VALUES (%s, %s, %s, %s)',
-                (id, pv_kw, Jsonb(kpis.model_dump()), saved_at),
-            )
+            # One statement picks the dataset and inserts, so it can't change in between
+            row = conn.execute(
+                'INSERT INTO "SavedScenario" (id, "pvKw", kpis, "savedAt", "datasetId") '
+                'SELECT %s, %s, %s, %s, id FROM "EnergyDataset" '
+                'WHERE id = %s OR %s::text IS NULL ORDER BY "createdAt" ASC LIMIT 1 '
+                'RETURNING "datasetId"',
+                (id, pv_kw, Jsonb(kpis.model_dump()), saved_at, dataset_id, dataset_id),
+            ).fetchone()
     except psycopg.Error:
         raise database_error()
+    if row is None:
+        raise HTTPException(
+            status_code=404, detail=NO_DATA_ERROR if dataset_id is None else DATASET_NOT_FOUND
+        )
+    return row["datasetId"]
 
 
-def add_scenario(pv_kw: JsonNumber, kpis: Kpis) -> SavedScenario:
+def add_scenario(pv_kw: JsonNumber, kpis: Kpis, dataset_id: Optional[str] = None) -> SavedScenario:
+    """Save a scenario for a dataset (None = the default one)."""
     scenario_id = str(uuid.uuid4())  # crypto.randomUUID() is a v4 UUID too
     # Stored as UTC without a time zone, in milliseconds (like Prisma's DateTime). Cut
     # to milliseconds here, so the response matches what is read back later.
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     saved_at = now.replace(microsecond=now.microsecond // 1000 * 1000)
 
-    insert_scenario(scenario_id, pv_kw, kpis, saved_at)
-    return SavedScenario(id=scenario_id, pvKw=pv_kw, kpis=kpis, savedAt=to_js_iso(saved_at))
+    linked_id = insert_scenario(scenario_id, pv_kw, kpis, saved_at, dataset_id)
+    return SavedScenario(
+        id=scenario_id, pvKw=pv_kw, kpis=kpis, savedAt=to_js_iso(saved_at), datasetId=linked_id
+    )

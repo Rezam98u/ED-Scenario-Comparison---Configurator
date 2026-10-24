@@ -31,7 +31,7 @@ Switch branches with `git switch <branch>`, then reinstall dependencies: `npm in
 - **Period picker** — switch between imported periods, or load a new one (up to 31 days) from real weather data; the chosen period is kept in the URL (`?dataset=<id>`)
 - **PV Configuration** — slider + numeric input (0–100 kW) to adjust PV capacity; changes are applied on demand
 - **Analysis** — daily autarky and the average hourly profile (pandas)
-- **Save scenarios** — persisted in PostgreSQL (`SavedScenario` table, survives restarts); optimistic UI updates
+- **Save scenarios** — persisted in PostgreSQL (`SavedScenario` table, survives restarts), each linked to the period it was calculated for and labelled with it in the list; optimistic UI updates
 - **Skeleton loading states & error boundaries** — graceful handling of slow or failed API calls
 - **AI Assistant (Groq)** — tool-calling chat agent that can query the dataset, run what-if scenarios, find the optimal PV size and save scenarios
 
@@ -206,8 +206,8 @@ FastAPI can always be called directly, e.g. `curl http://localhost:8000/api/ener
 | `GET`  | `/api/energy/datasets`  | List the imported periods (oldest first; the first is the default)   |
 | `POST` | `/api/energy/datasets`  | Import a period: body `{ start, end }` → `201`, or `200` if it exists |
 | `GET`  | `/api/energy/scenarios` | List all saved scenarios (newest first)                              |
-| `POST` | `/api/energy/scenarios` | Save a new scenario (`{ pvKw: number, kpis: Kpis }`) → `201`         |
-| `POST` | `/api/chat`             | Run the AI agent on a conversation (`{ messages: ChatMessage[] }`)   |
+| `POST` | `/api/energy/scenarios` | Save a new scenario (`{ pvKw: number, kpis: Kpis }`, optional `?datasetId=`) → `201` |
+| `POST` | `/api/chat`             | Run the AI agent: `{ messages, datasetId? }` → `{ messages, showDatasetId? }` |
 
 `/api/energy`, `/api/energy/calculate` and `/api/energy/analysis` take an optional `?datasetId=<id>`; without it they use the default dataset.
 
@@ -220,7 +220,7 @@ Errors are always JSON with an `error` message (the frontend reads `body.error`,
 | `400`  | Negative `pvKw` in `/api/energy/calculate`| `PV capacity cannot be negative`                                     |
 | `400`  | Invalid `POST /api/chat` body             | `Invalid request body`                                               |
 | `400`  | Invalid `POST /api/energy/datasets` body  | `start and end (YYYY-MM-DD) are required`, or why the period is not allowed |
-| `404`  | Unknown `?datasetId=`                     | `Dataset not found.`                                                 |
+| `404`  | Unknown `?datasetId=` (also when saving)  | `Dataset not found.`                                                 |
 | `404`  | `EnergyDataset` table is empty            | `No energy data. Run migrations and seed.`                           |
 | `500`  | Database unreachable or query failed      | `Database error. Check DATABASE_URL and that PostgreSQL is running.` |
 | `502`  | Open-Meteo failed during an import        | `Could not load weather data: ...`                                   |
@@ -234,7 +234,7 @@ Each imported period is one row in `EnergyDataset`, identified by its dates plus
 - Limits: `end` not before `start`, at most 31 days, and data only up to yesterday (UTC).
 - `GET /api/energy/datasets` returns `[{ id, label, start, end, params, createdAt }]`, oldest first. The first entry is the default that the dashboard shows.
 - The dashboard's **Period** card lists the periods (default first, then by date) and loads new ones through `POST /api/energy/datasets`. The chosen period is kept in the URL as `?dataset=<id>` and shown in a banner with "Back to default"; the KPIs, chart, scenario and analysis all follow it.
-- The AI agent still uses the default dataset, and saved scenarios are not yet linked to a period.
+- The AI agent works on the period the dashboard shows, and can load another one itself (see [AI Agent](#ai-agent-chat--optimizer)). Saved scenarios are linked to their period: `POST /api/energy/scenarios` stores `?datasetId=` (or the default dataset) as `datasetId`, and the dashboard's list shows every scenario with its period, so "10 kW in August" and "10 kW in October" can be compared. Scenarios saved before this existed were linked to the default dataset by migration 0004.
 
 ---
 
@@ -295,12 +295,14 @@ User → ChatPanel.tsx → POST /api/chat → run_agent loop (agent.py) → Groq
 - Tool arguments are validated with **Pydantic** models before any handler runs; invalid arguments go back to the model as `{ "error": ... }` so it can try again.
 - The optimizer itself is a **deterministic grid search** (`server-py/optimizer.py`), exposed as a tool — keeping expensive reasoning in fast, reliable code while the LLM handles intent and explanation.
 - Saved scenarios live in the `SavedScenario` table, so the agent sees scenarios saved from the dashboard, and scenarios the agent saves appear in the dashboard list.
+- **Periods:** the chat request carries the period the dashboard shows (`datasetId`), and every tool works on it. The model never handles dataset ids: when it calls `loadPeriod`, the following tool calls in the same turn use the new period, and the response includes `showDatasetId`, so the dashboard switches to it. The system prompt gives the model today's date and the current period, plus the rules for turning phrases like "the first week of October" into dates (days 1–7; without a year, the most recent one that has ended; at most 31 days, up to yesterday — the same limits as `POST /api/energy/datasets`).
 
 ### Tools the agent can call
 
 | Tool                | Purpose                                                              |
 | ------------------- | -------------------------------------------------------------------- |
-| `getEnergyData`     | Return the seeded 7-day baseline + KPIs                              |
+| `loadPeriod`        | Load a period (`start`, `end`), importing it if needed; the dashboard switches to it |
+| `getEnergyData`     | Return the current period's hourly baseline + KPIs                   |
 | `calculateScenario` | Simulate KPIs for a specific `pvKw`                                  |
 | `optimizeScenario`  | Grid-search best `pvKw` for `co2` / `coverage` / `minConsumption`    |
 | `listScenarios`     | Read the saved scenarios from the `SavedScenario` table              |
@@ -308,6 +310,7 @@ User → ChatPanel.tsx → POST /api/chat → run_agent loop (agent.py) → Groq
 
 ### Example prompts
 
+- *"Give me the scenario for the first week of October."*
 - *"What was the average daily PV coverage?"*
 - *"What would the KPIs look like if PV were 40 kW?"*
 - *"Find the best PV size to maximize CO2 savings under 50 kW."*

@@ -1,16 +1,17 @@
 // Chat API client — POSTs the conversation to the backend agent loop and
 // returns the full updated history (incl. assistant + tool messages).
 
-import type { ChatMessage } from '../../shared/types'
+import type { ChatMessage, ChatRequest, ChatResponse } from '../../shared/types'
 
 const BASE_URL = window.location.origin
 
 export const chatApi = {
-  async sendMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
+  async sendMessages(messages: ChatMessage[], datasetId: string | null): Promise<ChatResponse> {
+    const request: ChatRequest = { messages, datasetId }
     const response = await fetch(`${BASE_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify(request),
     })
 
     if (!response.ok) {
@@ -25,7 +26,6 @@ export const chatApi = {
       throw new Error(message || `Chat request failed: ${response.status}`)
     }
 
-    const body = (await response.json()) as { messages: ChatMessage[] }
-    return body.messages
+    return (await response.json()) as ChatResponse
   },
 }

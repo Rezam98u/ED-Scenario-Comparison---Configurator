@@ -3,6 +3,7 @@ import { useChat } from '../hooks/useChat'
 import type { ChatMessage, ChatToolCall } from '../../shared/types'
 
 const EXAMPLE_PROMPTS = [
+  'Show me the first week of October',
   'What was the average daily PV coverage?',
   'What if PV capacity were 40 kW?',
   'Find the best PV size to maximize CO2 savings',
@@ -76,8 +77,13 @@ function MessageRow({ msg }: { msg: ChatMessage }) {
   )
 }
 
-export function ChatPanel() {
-  const { messages, sendMessage, reset, isPending, error } = useChat()
+interface ChatPanelProps {
+  datasetId: string | null
+  onShowDataset: (datasetId: string) => void
+}
+
+export function ChatPanel({ datasetId, onShowDataset }: ChatPanelProps) {
+  const { messages, sendMessage, reset, isPending, error } = useChat({ datasetId, onShowDataset })
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 

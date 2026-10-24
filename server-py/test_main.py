@@ -21,9 +21,13 @@ def fake_table(monkeypatch):
     """Replace the SavedScenario table with a list, so these tests do not need a database."""
     rows = []
 
-    def insert_scenario(id, pv_kw, kpis, saved_at):
-        saved = store.SavedScenario(id=id, pvKw=pv_kw, kpis=kpis, savedAt=store.to_js_iso(saved_at))
+    def insert_scenario(id, pv_kw, kpis, saved_at, dataset_id):
+        linked_id = dataset_id or "default"  # the real one links None to the oldest dataset
+        saved = store.SavedScenario(
+            id=id, pvKw=pv_kw, kpis=kpis, savedAt=store.to_js_iso(saved_at), datasetId=linked_id
+        )
         rows.insert(0, saved)  # newest first, like ORDER BY "savedAt" DESC
+        return linked_id
 
     monkeypatch.setattr(store, "insert_scenario", insert_scenario)
     monkeypatch.setattr(store, "fetch_scenarios", lambda: list(rows))

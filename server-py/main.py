@@ -6,7 +6,7 @@ Run from server-py/:  uvicorn main:app --reload   (http://localhost:8000, docs a
 import logging
 import math
 import os
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import httpx
@@ -158,10 +158,11 @@ def list_scenarios():
 
 
 @app.post("/api/energy/scenarios", status_code=201, response_model=SavedScenario)
-def save_scenario(body: NewScenario):
+def save_scenario(body: NewScenario, datasetId: Optional[str] = None):
     # FastAPI has already validated the body against NewScenario; an invalid body
-    # never gets here (see the 400 handler).
-    return store.add_scenario(body.pvKw, body.kpis)
+    # never gets here (see the 400 handler). The KPIs belong to the period they were
+    # calculated for (?datasetId=, or the default).
+    return store.add_scenario(body.pvKw, body.kpis, datasetId)
 
 
 # Every energy endpoint takes an optional ?datasetId=; without it, the default (oldest)
@@ -179,24 +180,14 @@ def list_datasets():
     return store.list_datasets()
 
 
-MAX_DATASET_DAYS = 31  # longer periods make the hourly chart unreadable
-
-
 @app.post("/api/energy/datasets", response_model=DatasetSummary)
 def import_dataset(body: NewDataset):
     """Import a period from Open-Meteo (201), or return it if it already exists (200)."""
-    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
-    if body.end < body.start:
-        raise HTTPException(status_code=400, detail="end must not be before start")
-    if (body.end - body.start).days + 1 > MAX_DATASET_DAYS:
-        raise HTTPException(status_code=400, detail=f"A dataset can cover at most {MAX_DATASET_DAYS} days")
-    if body.end > yesterday:
-        raise HTTPException(status_code=400, detail=f"Data is only available up to yesterday ({yesterday})")
-
-    opts = {**import_open_meteo.DEFAULTS, "start": body.start.isoformat(), "end": body.end.isoformat()}
     try:
-        dataset, created = import_open_meteo.import_period(opts)
-    except ValueError as err:  # dates Open-Meteo has no data for (e.g. before 1940)
+        dataset, created = import_open_meteo.load_period(
+            body.start, body.end, today=datetime.now(timezone.utc).date()
+        )
+    except ValueError as err:  # outside the limits, or no data (e.g. before 1940)
         raise HTTPException(status_code=400, detail=str(err))
     except (RuntimeError, httpx.HTTPError) as err:
         logger.exception("Open-Meteo error")
@@ -232,13 +223,18 @@ def get_analysis(datasetId: Optional[str] = None):
 @app.post("/api/chat")
 def chat(body: agent.ChatRequest):
     """Run the agent on the conversation and return the full updated history, so the
-    client can show the tool calls."""
+    client can show the tool calls. When the agent loaded a period, showDatasetId tells
+    the dashboard to switch to it."""
     if not os.environ.get("GROQ_API_KEY"):
         raise HTTPException(status_code=503, detail="GROQ_API_KEY is not configured on the server.")
 
     messages = [m.model_dump(exclude_unset=True) for m in body.messages]
+    turn = agent.Turn(today=datetime.now(timezone.utc).date(), dataset_id=body.datasetId)
     try:
-        return {"messages": agent.run_agent(messages, agent.groq_client())}
+        response = {"messages": agent.run_agent(messages, agent.groq_client(), turn)}
+        if turn.loaded_dataset_id is not None:
+            response["showDatasetId"] = turn.loaded_dataset_id  # the dashboard switches to it
+        return response
     except Exception as err:
         logger.exception("Agent error")
         return JSONResponse(status_code=500, content={"error": str(err) or "Agent error"})

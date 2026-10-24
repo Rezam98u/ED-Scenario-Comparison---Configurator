@@ -105,6 +105,7 @@
 
 - Saved scenarios are stored in the PostgreSQL `SavedScenario` table (`fetch_scenarios` / `insert_scenario` / `add_scenario` in `server-py/store.py`, used by the API routes and the AI agent).
 - They survive restarts and are shared by the API routes and the AI agent, so scenarios saved by the agent appear in the dashboard.
+- Each scenario is linked to the period it was calculated for (`datasetId`, foreign key to `EnergyDataset`). The dashboard list shows all of them, each labelled with its period.
 
 ---
 

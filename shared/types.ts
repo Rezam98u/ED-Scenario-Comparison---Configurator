@@ -11,6 +11,7 @@ export interface SavedScenario {
   pvKw: number
   kpis: Kpis
   savedAt: string
+  datasetId: string // the period the KPIs were calculated for
 }
 
 // ─── AI Agent types ──────────────────────────────────────────────────────────
@@ -33,8 +34,10 @@ export interface ChatMessage {
 
 export interface ChatRequest {
   messages: ChatMessage[]
+  datasetId?: string | null // the period the dashboard shows; null = the default
 }
 
 export interface ChatResponse {
   messages: ChatMessage[]
+  showDatasetId?: string // set when the agent loaded a period: the dashboard switches to it
 }

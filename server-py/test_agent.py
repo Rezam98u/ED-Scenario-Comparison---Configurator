@@ -4,6 +4,7 @@ Groq is replaced by FakeGroq and the database by fakes, so nothing leaves the ma
 """
 
 import json
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -25,6 +26,13 @@ DATASET = {
     "kpis": {"total_consumption_kwh": 80, "pv_coverage_pct": 12.5, "co2_savings_ton": 0},
 }
 USER = {"role": "user", "content": "What if I install 10 kW?"}
+TODAY = date(2026, 10, 24)
+AUGUST = {"id": "aug", "start": "2026-08-01", "end": "2026-08-07"}
+OCTOBER = {"id": "oct", "start": "2026-10-01", "end": "2026-10-07"}
+
+
+def new_turn(dataset_id=None):
+    return agent.Turn(today=TODAY, dataset_id=dataset_id)
 
 
 class FakeGroq:
@@ -54,12 +62,17 @@ def tool_call(name, arguments, call_id="call_1"):
 def fake_db(monkeypatch):
     rows = []
 
-    def insert_scenario(id, pv_kw, kpis, saved_at):
-        rows.insert(0, store.SavedScenario(id=id, pvKw=pv_kw, kpis=kpis, savedAt=store.to_js_iso(saved_at)))
+    def insert_scenario(id, pv_kw, kpis, saved_at, dataset_id):
+        linked_id = dataset_id or AUGUST["id"]  # the real one links None to the oldest dataset
+        rows.insert(0, store.SavedScenario(
+            id=id, pvKw=pv_kw, kpis=kpis, savedAt=store.to_js_iso(saved_at), datasetId=linked_id
+        ))
+        return linked_id
 
     monkeypatch.setattr(store, "load_dataset", lambda dataset_id=None: DATASET)
     monkeypatch.setattr(store, "insert_scenario", insert_scenario)
     monkeypatch.setattr(store, "fetch_scenarios", lambda: list(rows))
+    monkeypatch.setattr(store, "list_datasets", lambda: [AUGUST, OCTOBER])
     return rows
 
 
@@ -89,27 +102,27 @@ def test_optimizer_rejects_invalid_ranges(kwargs):
 
 
 def test_calculate_tool(fake_db):
-    result = json.loads(agent.run_tool("calculateScenario", '{"pvKw": 10}'))
+    result = json.loads(agent.run_tool("calculateScenario", '{"pvKw": 10}', new_turn()))
     assert result == {"pvKw": 10, "kpis": calculate_scenario(BASELINE, 10)["kpis"]}
 
 
 def test_get_energy_data_tool(fake_db):
-    result = json.loads(agent.run_tool("getEnergyData", ""))
+    result = json.loads(agent.run_tool("getEnergyData", "", new_turn()))
     assert result == {"timestamps": DATASET["timestamps"], "baseline": BASELINE, "baselineKpis": DATASET["kpis"]}
 
 
 def test_optimize_tool_downsamples_the_search_path(fake_db):
-    result = json.loads(agent.run_tool("optimizeScenario", '{"objective": "coverage", "maxKw": 30}'))
+    result = json.loads(agent.run_tool("optimizeScenario", '{"objective": "coverage", "maxKw": 30}', new_turn()))
     assert result["bestPvKw"] == 30
     assert [p["pvKw"] for p in result["topFive"]] == [30, 29, 28, 27, 26]
     assert [p["pvKw"] for p in result["sampledPath"]] == [0, 10, 20, 30]
 
 
 def test_save_and_list_tools_share_the_store(fake_db):
-    saved = json.loads(agent.run_tool("saveScenario", '{"pvKw": 5}'))
+    saved = json.loads(agent.run_tool("saveScenario", '{"pvKw": 5}', new_turn()))
     assert saved["pvKw"] == 5
     assert saved["kpis"] == calculate_scenario(BASELINE, 5)["kpis"]
-    assert json.loads(agent.run_tool("listScenarios", "{}")) == [saved]
+    assert json.loads(agent.run_tool("listScenarios", "{}", new_turn())) == [saved]
     # The dashboard reads the same table
     assert client.get("/api/energy/scenarios").json() == [saved]
 
@@ -126,7 +139,7 @@ def test_save_and_list_tools_share_the_store(fake_db):
     ],
 )
 def test_tool_errors_are_returned_to_the_model(fake_db, name, arguments, message):
-    result = json.loads(agent.run_tool(name, arguments))
+    result = json.loads(agent.run_tool(name, arguments, new_turn()))
     assert message in result["error"]
 
 
@@ -135,7 +148,7 @@ def test_tool_reports_database_errors_by_message(monkeypatch):
         raise store.HTTPException(status_code=404, detail=store.NO_DATA_ERROR)
 
     monkeypatch.setattr(store, "load_dataset", no_data)
-    assert json.loads(agent.run_tool("calculateScenario", '{"pvKw": 1}')) == {"error": store.NO_DATA_ERROR}
+    assert json.loads(agent.run_tool("calculateScenario", '{"pvKw": 1}', new_turn())) == {"error": store.NO_DATA_ERROR}
 
 
 # --- agent loop --------------------------------------------------------------
@@ -143,7 +156,7 @@ def test_tool_reports_database_errors_by_message(monkeypatch):
 
 def test_run_agent_runs_tools_until_the_final_answer(fake_db):
     groq = FakeGroq(tool_call("calculateScenario", '{"pvKw": 10}'), answer("Coverage would be 30%."))
-    messages = agent.run_agent([USER], groq)
+    messages = agent.run_agent([USER], groq, new_turn())
 
     kpis = calculate_scenario(BASELINE, 10)["kpis"]
     assert messages == [
@@ -163,7 +176,9 @@ def test_run_agent_runs_tools_until_the_final_answer(fake_db):
     ]
 
     first, second = groq.requests
-    assert first["messages"][0] == {"role": "system", "content": agent.SYSTEM_PROMPT}
+    system = first["messages"][0]
+    assert system["role"] == "system"
+    assert "Today is 2026-10-24 (UTC). The dashboard currently shows 2026-08-01 to 2026-08-07." in system["content"]
     assert first["tools"] == agent.TOOL_SCHEMAS and first["model"] == agent.MODEL
     # Groq needs the full tool_calls shape on earlier assistant messages
     assert second["messages"][2]["tool_calls"] == [
@@ -174,7 +189,7 @@ def test_run_agent_runs_tools_until_the_final_answer(fake_db):
 
 def test_run_agent_stops_after_max_steps(fake_db):
     groq = FakeGroq(tool_call("listScenarios", "{}"))  # never answers
-    messages = agent.run_agent([USER], groq)
+    messages = agent.run_agent([USER], groq, new_turn())
     assert len(groq.requests) == agent.MAX_STEPS
     assert messages[-1]["content"].startswith("I ran out of tool-call steps")
 
@@ -224,3 +239,89 @@ def test_chat_agent_error_returns_500(groq_key, monkeypatch):
     response = client.post("/api/chat", json={"messages": [USER]})
     assert response.status_code == 500
     assert response.json() == {"error": "Groq is down"}
+
+
+# --- periods: loadPeriod and the turn's dataset -----------------------------
+
+
+@pytest.fixture
+def fake_import(monkeypatch):
+    """Fake import_open_meteo.import_period: 'imports' any period as dataset 'oct'."""
+    calls = []
+
+    def import_period(opts):
+        calls.append((opts["start"], opts["end"]))
+        return {**OCTOBER, "start": opts["start"], "end": opts["end"]}, True
+
+    monkeypatch.setattr(agent.import_open_meteo, "import_period", import_period)
+    return calls
+
+
+@pytest.fixture
+def requested_ids(fake_db, monkeypatch):
+    """Records which dataset id each tool asked store.load_dataset for."""
+    ids = []
+
+    def load_dataset(dataset_id=None):
+        ids.append(dataset_id)
+        return DATASET
+
+    monkeypatch.setattr(store, "load_dataset", load_dataset)
+    return ids
+
+
+def test_tools_use_the_period_the_dashboard_shows(requested_ids):
+    agent.run_tool("calculateScenario", '{"pvKw": 10}', new_turn("oct"))
+    agent.run_tool("getEnergyData", "", new_turn())
+    assert requested_ids == ["oct", None]
+
+
+def test_load_period_switches_the_rest_of_the_turn(requested_ids, fake_import):
+    groq = FakeGroq(
+        tool_call("loadPeriod", '{"start": "2026-10-01", "end": "2026-10-07"}'),
+        tool_call("calculateScenario", '{"pvKw": 10}', call_id="call_2"),
+        answer("In the first week of October, coverage would be 30%."),
+    )
+    turn = new_turn()
+    messages = agent.run_agent([{"role": "user", "content": "Give me the first week in October"}], groq, turn)
+
+    assert fake_import == [("2026-10-01", "2026-10-07")]
+    assert json.loads(messages[2]["content"]) == {"start": "2026-10-01", "end": "2026-10-07", "newlyImported": True}
+    assert requested_ids == ["oct"]  # calculateScenario used the loaded period
+    assert (turn.dataset_id, turn.loaded_dataset_id) == ("oct", "oct")
+
+
+@pytest.mark.parametrize(
+    "arguments, message",
+    [
+        ('{"start": "2026-10-20", "end": "2026-10-30"}', "only available up to yesterday (2026-10-23)"),
+        ('{"start": "2026-08-01", "end": "2026-09-30"}', "at most 31 days"),
+        ('{"start": "2026-10-07", "end": "2026-10-01"}', "end must not be before start"),
+        ('{"start": "first week of October", "end": "2026-10-07"}', "start"),
+    ],
+)
+def test_load_period_errors_go_back_to_the_model(fake_import, arguments, message):
+    turn = new_turn()
+    result = json.loads(agent.run_tool("loadPeriod", arguments, turn))
+    assert message in result["error"]
+    assert fake_import == [] and turn.loaded_dataset_id is None  # nothing imported or shown
+
+
+@pytest.mark.parametrize("dataset_id, expected", [(None, "2026-08-01 to 2026-08-07"), ("oct", "2026-10-01 to 2026-10-07"), ("gone", "no data")])
+def test_describe_period(fake_db, dataset_id, expected):
+    assert agent.describe_period(dataset_id) == expected
+
+
+def test_chat_passes_the_period_and_reports_a_loaded_one(fake_db, fake_import, groq_key, monkeypatch):
+    groq = FakeGroq(tool_call("loadPeriod", '{"start": "2025-10-01", "end": "2025-10-07"}'), answer("Done."))
+    monkeypatch.setattr(agent, "groq_client", lambda: groq)
+
+    response = client.post("/api/chat", json={"messages": [USER], "datasetId": "oct"})
+    assert response.status_code == 200
+    assert response.json()["showDatasetId"] == "oct"
+    assert "currently shows 2026-10-01 to 2026-10-07" in groq.requests[0]["messages"][0]["content"]
+
+
+def test_chat_without_load_period_has_no_show_dataset_id(fake_db, groq_key, monkeypatch):
+    monkeypatch.setattr(agent, "groq_client", lambda: FakeGroq(answer("Hello!")))
+    assert "showDatasetId" not in client.post("/api/chat", json={"messages": [USER]}).json()
