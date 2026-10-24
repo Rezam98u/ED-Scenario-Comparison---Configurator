@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "tsx prisma/importOpenMeteo.ts",
+    "db:import-weather": "tsx prisma/importOpenMeteo.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -30,6 +31,6 @@
     "typescript": "^5.7.3"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/importOpenMeteo.ts"
   }
 }

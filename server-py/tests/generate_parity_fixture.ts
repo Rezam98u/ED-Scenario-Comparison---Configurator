@@ -1,4 +1,4 @@
-// Runs the TypeScript calculateScenario (the reference) on the mock data and saves the
+// Runs the TypeScript calculateScenario (the reference) on the real-week snapshot and saves the
 // results as a fixture for server-py/test_calculations.py.
 //
 // Run from the repo root (uses the tsx that is installed in server/):
@@ -13,10 +13,10 @@ import type { Baseline } from '../../src/types/energy'
 const PV_KW_VALUES = [0, 5, 10, 33.3, 100]
 
 const here = dirname(fileURLToPath(import.meta.url))
-const mockDataPath = join(here, '../../mock-data/energy-2025-01-01-2025-01-07.json')
+const realWeekPath = join(here, 'fixtures/baseline_2026-08-01_2026-08-07.json')
 const outputPath = join(here, 'fixtures/scenario_parity.json')
 
-const { baseline } = JSON.parse(readFileSync(mockDataPath, 'utf-8')) as { baseline: Baseline }
+const { baseline } = JSON.parse(readFileSync(realWeekPath, 'utf-8')) as { baseline: Baseline }
 
 const cases = PV_KW_VALUES.map((pvKw) => ({ pvKw, result: calculateScenario(baseline, pvKw) }))
 

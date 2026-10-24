@@ -62,13 +62,13 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 
 ```
 .
-├── mock-data/                    # Seed JSON (7-day hourly dataset)
 ├── shared/types.ts               # API types shared by frontend and backend (Kpis, SavedScenario)
 ├── server/                       # Backend 1: Express + Prisma (port 4000)
 │   ├── prisma/
 │   │   ├── migrations/           # SQL migrations
-│   │   ├── schema.prisma
-│   │   └── seed.ts
+│   │   ├── data/bdew-g0.json     # BDEW G0 standard load profile (used by the importer)
+│   │   ├── importOpenMeteo.ts    # Seed script: real data (Open-Meteo PV + BDEW G0 load)
+│   │   └── schema.prisma
 │   └── src/
 │       ├── routes/energy.ts
 │       ├── lib/prisma.ts
@@ -80,7 +80,7 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 │   ├── test_main.py              # pytest tests (endpoints)
 │   ├── test_calculations.py      # parity tests against the TypeScript version
 │   ├── test_analysis.py          # analysis + GET /api/energy/analysis tests
-│   ├── tests/                    # parity fixture + the script that generates it
+│   ├── tests/                    # real-week snapshot, parity fixture + the script that generates it
 │   └── requirements.txt
 ├── src/
 │   ├── api/energyApi.ts
@@ -96,7 +96,7 @@ Switch branches with `git switch <branch>`, then reinstall dependencies if `pack
 ## Quick Start
 
 1. Install the Node dependencies: `npm install` in the root and in `server/` (the Express server also owns the migrations and the seed script).
-2. Start PostgreSQL and load the demo data: see [Seeding the Database](#seeding-the-database).
+2. Start PostgreSQL and load the data: see [Seeding the Database](#seeding-the-database).
 3. Start both backends and the frontend: see [Running the App: Express and FastAPI](#running-the-app-express-and-fastapi).
 4. Open <http://localhost:5173>.
 
@@ -119,23 +119,41 @@ The FastAPI backend keeps everything in one file, `server-py/main.py`, organized
 
 ## Seeding the Database
 
-The seed script (`server/prisma/seed.ts`) populates the `EnergyDataset` table with one week of mock hourly data (Jan 1–7, 2025) sourced from `mock-data/energy-2025-01-01-2025-01-07.json`.
+This branch uses **real data** (the mock dataset is only used on `main`). The seed script, `server/prisma/importOpenMeteo.ts`, fills the `EnergyDataset` table with real hourly data, by default for Aug 1–7, 2026 in Düsseldorf (NRW).
 
-Start the database and run the seed once after applying migrations. Both backends read the same database, so this is needed for FastAPI too. The migrate and seed scripts need `DATABASE_URL` in `server/.env`, e.g. `postgresql://postgres:postgres@localhost:5432/energy_dashboard?schema=public`.
+Start the database and run the seed once after applying migrations. Both backends read the same database, so this is needed for FastAPI too. The migrate and seed scripts need `DATABASE_URL` in `server/.env`, e.g. `postgresql://postgres:postgres@localhost:5432/energy_dashboard?schema=public`. The seed calls the Open-Meteo API, so it needs internet access (no API key).
 
 ```bash
 docker compose up -d db
 cd server
 npm run db:migrate   # apply schema migrations
-npm run db:seed      # load mock data into the database
+npm run db:seed      # load real data into the database
 ```
 
-**What it does:**
-1. Reads the mock JSON file containing `timestamps`, `baseline`, `scenario`, and `kpis` arrays.
-2. Clears any existing rows in `EnergyDataset` (safe to re-run).
-3. Inserts a single `demo` dataset row that the `GET /api/energy` endpoint serves to the frontend.
-
 > Without seeding, the `GET /api/energy` endpoint returns a `404` and the dashboard will show no data.
+
+### Where the data comes from
+
+- **PV generation** — hourly global tilted irradiance from the [Open-Meteo historical weather API](https://open-meteo.com/en/docs/historical-weather-api) (no API key, data up to yesterday), converted with a simple performance-ratio model: `kWh = kWp × irradiance / 1000 × PR`.
+- **Consumption** — the BDEW **G0** standard load profile (commercial), with seasons, Saturdays, Sundays and NRW public holidays, scaled so the calendar year adds up to `--annual-kwh`.
+
+`npm run db:import-weather` runs the same script; pass flags to load a different period, place or system:
+
+```bash
+cd server
+npm run db:import-weather -- --start 2026-10-01 --end 2026-10-07 --kwp 10
+```
+
+| Flag | Default | Meaning |
+| ---- | ------- | ------- |
+| `--lat`, `--lon` | `51.2277`, `6.7735` | Location (Düsseldorf, NRW) |
+| `--start`, `--end` | `2026-08-01`, `2026-08-07` | Inclusive UTC days |
+| `--kwp` | `10` | Baseline PV system size |
+| `--tilt`, `--azimuth` | `35`, `0` | Panel tilt; azimuth 0 = south, -90 = east, 90 = west |
+| `--pr` | `0.85` | Performance ratio |
+| `--annual-kwh` | `75000` | Yearly consumption the G0 profile is scaled to (≈ 1,430 kWh/week) |
+
+Both backends serve the oldest `EnergyDataset` row, so the script deletes the existing rows first (safe to re-run). The tests never call Open-Meteo: they use a snapshot of the default week in `server-py/tests/fixtures/baseline_2026-08-01_2026-08-07.json`. The most recent days come from weather models and are later corrected by Open-Meteo's reanalysis, so re-running the import a few days later can change them slightly.
 
 ---
 
@@ -296,7 +314,8 @@ The FastAPI backend calculates scenario values in `server-py/calculations.py` (p
 | `npm run dev`        | Start API with hot reload (tsx watch)     |
 | `npm run build`      | Compile TypeScript                        |
 | `npm run db:migrate` | Apply Prisma migrations                   |
-| `npm run db:seed`    | Seed database from mock JSON              |
+| `npm run db:seed`    | Seed database with real data (Open-Meteo PV + BDEW G0 consumption) |
+| `npm run db:import-weather` | Same script, for passing flags (period, location, kWp) |
 | `npm run db:push`    | Push schema without migrations (dev only) |
 
 ### Python backend (`server-py/`, with the virtual environment active)

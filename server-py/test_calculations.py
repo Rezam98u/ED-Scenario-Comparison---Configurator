@@ -13,13 +13,14 @@ import pytest
 from calculations import calculate_scenario, js_round
 
 HERE = Path(__file__).parent
-MOCK_DATA = json.loads((HERE / "../mock-data/energy-2025-01-01-2025-01-07.json").read_text())
+# Snapshot of the real-data import, so the tests never call Open-Meteo
+REAL_WEEK = json.loads((HERE / "tests/fixtures/baseline_2026-08-01_2026-08-07.json").read_text())
 PARITY_CASES = json.loads((HERE / "tests/fixtures/scenario_parity.json").read_text())["cases"]
 
 
 @pytest.mark.parametrize("case", PARITY_CASES, ids=lambda c: f"pvKw={c['pvKw']}")
 def test_matches_typescript_exactly(case):
-    result = calculate_scenario(MOCK_DATA["baseline"], case["pvKw"])
+    result = calculate_scenario(REAL_WEEK["baseline"], case["pvKw"])
     # == on floats is an exact comparison, so this fails on any difference in the last bit
     assert result == case["result"]
 

@@ -110,4 +110,4 @@
 - Run `npm run db:migrate` then `npm run db:seed` once after setting up the database.
 - The seed script wipes existing `EnergyDataset` rows before inserting — safe to re-run.
 - Without seeding, `GET /api/energy` returns 404 and the dashboard shows no data.
-- Seed data source: `mock-data/energy-2025-01-01-2025-01-07.json` (7-day hourly dataset).
+- Seed data source: real data from `server/prisma/importOpenMeteo.ts` (Open-Meteo PV + BDEW G0 consumption, Aug 1–7, 2026, Düsseldorf). Mock data is only used on `main`.
